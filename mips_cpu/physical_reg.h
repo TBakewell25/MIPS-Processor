@@ -48,8 +48,19 @@ class PhysicalRegisterUnit {
         RAT RAT_Unit = RAT(32);
 
         std::vector<uint32_t> physTable; // a table holding n many phsyical registers (32-bit each) 
+
+        // Reorder Buffer (ROB)
+        struct ROBEntry {
+            uint32_t instruction;
+            int dest_reg;        // Architectural destination register
+            int phys_reg;        // Physical destination register
+            int old_phys_reg;    // Previous mapping for recovery
+            bool completed;      // Has the instruction completed execution?
+            bool ready_to_commit; // Is it ready to commit?
+            uint32_t result;     // Result value
+        };
         
-        std::vector<uint32_t> reorderBuffer; // the instruction reorderbuffer, a circular buffer implemented below
+        std::vector<ROBEntry> reorderBuffer; // the instruction reorderbuffer, a circular buffer implemented below
         
         ///values for circ buffer implementation
         int head, tail, 
@@ -63,7 +74,7 @@ class PhysicalRegisterUnit {
  
         // Enqueue operation
         // 0 on success, -1 on error
-        int enqueue(uint32_t value) {
+        int enqueue(ROBEntry value) {
             if (is_full) 
                 return -1;
 
@@ -83,7 +94,7 @@ class PhysicalRegisterUnit {
             if (isEmpty())
                 return 0xFFFFFFFF; 
 
-            uint32_t value = reorderBuffer[head];
+            ROBEntry value = reorderBuffer[head];
             head = (head + 1) % capacity;
             is_full = false;  // After dequeue, buffer cannot be full
         

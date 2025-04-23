@@ -10,7 +10,6 @@ class ReservationStation {
 
     private:
 
-        char name;
         uint32_t operation; // operation to perform
    
         uint32_t RS1; // station that will produce first operand, 0 indicates operand available
@@ -24,7 +23,9 @@ class ReservationStation {
 
     public:
 
-        ReservationStation() {};
+        ReservationStation() {
+            occupied = false;
+        };
 
         // Check if CandidateStation is occupied
         bool checkStation() { return occupied; }

@@ -10,6 +10,8 @@ using namespace std;
 #define debug(x) 
 #endif
 
+       
+
 void Processor::initialize(int level) {
     // Initialize Control
     control = {.reg_dest = 0, 
@@ -114,6 +116,23 @@ void Processor::single_cycle_processor_advance() {
     regfile.pc = control.jump_reg ? read_data_1 : control.jump ? (regfile.pc & 0xf0000000) & (addr << 2): regfile.pc;
 }
 
+// check for arithmetic or mem to dispatch to RS
+// 0 if ar, 1 if mem
+int checkInstructionType(uint32_t instruction) {
+    int opcode = (instruction >> 26) & 0x3f;
+ 
+    if (opcode == 0x2b || opcode == 0x28 || opcode == 0x29) // stores
+        return 1;
+
+    if ((opcode >= 0x23 && opcode <= 0x25) || opcode == 0x30) // Loads
+        return 1;
+
+    // base case, arithmetic
+    return 0;
+}
+    
+    
+
 void Processor::fetch() {
     uint32_t instruction;
     bool instruction_read;
@@ -130,26 +149,95 @@ void Processor::fetch() {
     regfile.pc += 4;
 }
 
+/*
+*   Steps for rename stage:
+*       1. peek at instruction in IQ
+*       2. decode the peeked value (do not fetch)
+*       3. check resources (ROB, RS, RAT)
+*       4. Rename
+*       5. Create ROBEntry
+*       6. Push to RS
+*       7. remove instruction
+*/
+
 void Processor::rename(){
-    // get instruction from head of queue
+    // 1. peek at instruction
+    // TODO: currenty pops, needs to peek
     uint32_t instruction = instruction_queue.pop_back();
 
-    // TODO: add mem station dispatching
+    // 2. decode peeked value
+    control_t control;
+    control.decode(instruction);
 
-    int available_station = checkStationsArith()
+    // extract rs, rt, rd, imm, funct 
+    int opcode = (instruction >> 26) & 0x3f;
+    int rs = (instruction >> 21) & 0x1f;
+    int rt = (instruction >> 16) & 0x1f;
+    int rd = (instruction >> 11) & 0x1f;
+    int shamt = (instruction >> 6) & 0x1f;
+    int funct = instruction & 0x3f;
+    uint32_t imm = (instruction & 0xffff);
+    int addr = instruction & 0x3ffffff;
 
-    // return if no reservation station available, leave instruction in queue
-    if (!available_station >= 0)
-        return;
+    // 3. check resources
+    // 0 arithmetic, 1 memory operation
+    int instr_type = getInstructionType(instruction); 
 
-    // TODO: these probably have to be decoded
-    // otherwise, this conditional dispatches arithmetic instructions to appropriate stations
-    if (available_station >= 0)
-        dispatchArithInstruction(available_station, instruction);
-        
+    // exit if there is no reorder buffer spot available
+    // logic probably needs work
+    if (!nextState.checkReorderBuffer())
+        return;  
 
-   
+    // check if we need to send this somewhere
+    // then check mappings to see if we can 
+    if (control.reg_dest) {
+        bool rat_availability = checkRAT(rd);
+        if (rat_availability)
+            pushToRat(rd, instruction);
+        else
+            return;
+    }
 
+    switch(instr_type) {
+        case(0):
+            int available_station_a = nextState.checkStationArith();
+            
+            if (available_station_a >= 0)
+                nextState.pushToArith(available_station_a, instruction);        
+            else
+                return;
+            break;
+
+        case(1):
+            int available = nextState.checkStationMem();
+            
+            if (available >= 0)
+                nextState.pushToMem(available_station_a, instruction);
+            else
+                return;
+            break;
+    }    
+
+    // 4. Rename
+
+    // Variables to read data into
+    uint32_t read_data_1 = 0;
+    uint32_t read_data_2 = 0;
+    
+    // Read from reg file
+    regfile.access(rs, rt, read_data_1, read_data_2, 0, 0, 0);
+
+    // 5. Create ROBEntry
+    ROBEntry toBeSent = populateROBEntry(instruction,
+                     rd,
+                     phys_reg, // not implemented
+                     old_phys_reg) // not implemented
+    pushToROB(toBeSent);  
+ 
+    // 6. done above, needs to be moved down here
+
+    // 7.
+    instruction_queue.pop();
 }
 void Processor::dispatch(){}
 void Processor::execute(){}

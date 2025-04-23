@@ -37,33 +37,52 @@ class Processor {
         *    -functional units
         */
 
-        struct State {
+        class State {
             // Reservation Stations
             ReservationStation ArithmeticStations[ARITHM_STATIONS];
             ReservationStation MemoryStations[MEM_STATIONS];
     
-            // Register Alias Table (RAT) - maps architectural to physical registers
-            int RAT[32];  // For 32 MIPS registers
     
             // Free list for physical registers
             std::queue<int> freePhysRegs;
-    
-            // Reorder Buffer (ROB)
-            struct ROBEntry {
-                uint32_t instruction;
-                int dest_reg;        // Architectural destination register
-                int phys_reg;        // Physical destination register
-                int old_phys_reg;    // Previous mapping for recovery
-                bool completed;      // Has the instruction completed execution?
-                bool ready_to_commit; // Is it ready to commit?
-                uint32_t result;     // Result value
-            };
-            std::queue<ROBEntry> reorderBuffer;
+
+            // create physical registers and reorder buffer
+            PhysicalRegisterUnit physRegFile = PhysicalRegisterUnit(REG_COUNT);       
     
             // Common Data Bus signals
             bool CDB_valid;
             int CDB_phys_reg;
             uint32_t CDB_value;
+
+            public:
+
+                // check for opening in state's instance of the ROB
+                bool check_reorderBuffer() { return physRegFile.isFull(); }
+
+                // push to state's instance of ROB
+                void pushToROB(ROBEntry item) { reorderBuffer.enqueue(item); }
+
+                // push to any available arithmetic reservation stations
+                void pushToArith(int index, uint32_t instruction) { ArithmeticStations[index] = instruction; }
+              
+                // push to any available memory stations 
+                void pushToMem(int index, uint32_t instruction) { MemoryStations[index] = instruction; }
+
+                int checkStationsArith() {
+                    for (int i = 0; i < ARITHM_STATIONS; ++i) {
+                        if (!ArithmeticStations[i].checkStation())
+                            return i;
+                    }
+                    return -1;
+                }
+
+                int checkStationsMem() {
+                    for (int i = 0; i < MEM_STATIONS; ++i) {
+                        if (!MemoryStations[i].checkStation())
+                            return i;
+                    }
+                    return -1;
+                }
         };
    
         State currentState;
@@ -72,14 +91,6 @@ class Processor {
         // an instruction queue to get instructions from fetch to rename stages  
         std::queue<uint32_t>instruction_queue;
  
-        // reservation stations, see reservation.h
-        // need to be initialized (maybe?)
-        ReservationStation ArithmeticStations[ARITHM_STATIONS]; 
-        ReservationStation MemoryStations[MEM_STATIONS]; 
-
-        // create physical registers and reorder buffer
-        PhysicalRegisterUnit physRegFile = PhysicalRegisterUnit(REG_COUNT);       
-    
         // common data bus is just a vector for simplicity, might need to do more 
         std::vector<uint32_t> CommonDataBus;
 
@@ -104,23 +115,6 @@ class Processor {
 
     public:
         Processor(Memory *mem) { regfile.pc = 0; memory = mem;}
-
-        int checkStationsArith() {
-            for (int i = 0; i < ARITHM_STATIONS; ++i) {
-                if (!ArithmeticStations[i].checkStation())
-                    return i;
-            }
-            return -1;
-        }
-
-        int checkStationsMem() {
-            for (int i = 0; i < MEM_STATIONS; ++i) {
-                if (!MemoryStations[i].checkStation())
-                    return i;
-            }
-            return -1;
-        }
-          
         
         // Get PC
         uint32_t getPC() { return regfile.pc; }
@@ -134,6 +128,21 @@ class Processor {
         // Advances the processor to an appropriate state every cycle
         void advance(); 
 
-	
+        ROBEntry populateROBEntry(uint32_t instruction,
+                                  int dest_reg,  
+                                  int phys_reg,   
+                                  int old_phys_reg) {
 
+            ROBEntry new_entry;
+            new_entry.instruction = instruction;
+            new_entry.dest_reg = dest_reg;
+            new_entry.phys_reg = phys_reg;
+            new_entry.old_phys_reg = old_phys_reg;
+            new_entry.completed = false;
+            new_entry.read_to_commit = false;
+            new_entry.result = 0;
+
+            return new_entry;
+         }    
+ 
 };
