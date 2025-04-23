@@ -1,0 +1,50 @@
+# Prepare test program to simulate
+mipsel-linux-gnu-gcc -mips32 <path-to-benchmark-source> -nostartfiles -Ttext=0 -o <path-to-benchmark-executable>
+
+# Build the simulator
+make clean; make
+
+# Run the simulator
+./processor --bmk=<path-to-benchmark-executable> -O<opt-level> > log
+
+# The output log contains the state of the register file printed at every cycle,
+# along with the overall time spent (in microseconds) executing the benchmark.
+# We look for functional correctness as well as the performance in our evaluation.
+#
+# Example:
+# 
+# CYCLE X
+# R[0]: 0
+# R[1]: 0
+# R[2]: 5278
+# R[3]: 4
+# R[4]: 32768
+# R[5]: 2
+# R[6]: 17745
+# R[7]: 9214
+# R[8]: 4780
+# R[9]: 2184
+# R[10]: 0
+# R[11]: 0
+# R[12]: 0
+# R[13]: 0
+# R[14]: 0
+# R[15]: 0
+# R[16]: 0
+# R[17]: 0
+# R[18]: 0
+# R[19]: 0
+# R[20]: 0
+# R[21]: 0
+# R[22]: 0
+# R[23]: 0
+# R[24]: 0
+# R[25]: 0
+# R[26]: 0
+# R[27]: 0
+# R[28]: 0
+# R[29]: 0
+# R[30]: 0
+# R[31]: 0
+
+# Completed execution in 646875 nanoseconds. 
