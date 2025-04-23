@@ -131,6 +131,24 @@ void Processor::fetch() {
 }
 
 void Processor::rename(){
+    // get instruction from head of queue
+    uint32_t instruction = instruction_queue.pop_back();
+
+    // TODO: add mem station dispatching
+
+    int available_station = checkStationsArith()
+
+    // return if no reservation station available, leave instruction in queue
+    if (!available_station >= 0)
+        return;
+
+    // TODO: these probably have to be decoded
+    // otherwise, this conditional dispatches arithmetic instructions to appropriate stations
+    if (available_station >= 0)
+        dispatchArithInstruction(available_station, instruction);
+        
+
+   
 
 }
 void Processor::dispatch(){}
@@ -145,4 +163,6 @@ void Processor::ooo_advance() {
     execute();
     write_back();
     commit();
+
+    currentState = nextState;
 }
