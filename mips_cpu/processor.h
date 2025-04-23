@@ -21,7 +21,8 @@ class Processor {
         control_t control;
         Memory *memory;
         Registers regfile;
-     
+    
+        uint32_t processor_pc; // an additional pc to track 
         //// OOO things
    
         // reservation stations, see reservation.h
