@@ -2,18 +2,29 @@
 #include "regfile.h"
 #include "ALU.h"
 #include "control.h"
+#include "reservation.h"
+
+#ifdef enable_debug
+#define debug(x) x
+#else
+#define debug(x) 
+#endif
+
 class Processor {
     private:
+
         int opt_level;
         ALU alu;
         control_t control;
         Memory *memory;
         Registers regfile;
-        // add other structures as needed
+     
+        //// OOO things
+   
+        // reservation stations, see reservation.h
+        // need to be initialized
+        ReservationStation stationSet[4]; 
 
-        // pipelined processor
-
-        // add private functions
         void single_cycle_processor_advance();
         void pipelined_processor_advance();
  

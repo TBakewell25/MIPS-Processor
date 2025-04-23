@@ -3,10 +3,10 @@
 #include "processor.h"
 using namespace std;
 
-#ifdef ENABLE_DEBUG
-#define DEBUG(x) x
+#ifdef enable_debug
+#define debug(x) x
 #else
-#define DEBUG(x) 
+#define debug(x) 
 #endif
 
 void Processor::initialize(int level) {
@@ -47,13 +47,13 @@ void Processor::single_cycle_processor_advance() {
     // fetch
     uint32_t instruction;
     memory->access(regfile.pc, instruction, 0, 1, 0);
-    DEBUG(cout << "\nPC: 0x" << std::hex << regfile.pc << std::dec << "\n");
+    //DEBUG(cout << "\nPC: 0x" << std::hex << regfile.pc << std::dec << "\n");
     // increment pc
     regfile.pc += 4;
     
     // decode into contol signals
     control.decode(instruction);
-    DEBUG(control.print());
+//    DEBUG(control.print());
 
     // extract rs, rt, rd, imm, funct 
     int opcode = (instruction >> 26) & 0x3f;
