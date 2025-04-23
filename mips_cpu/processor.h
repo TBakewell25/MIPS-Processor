@@ -3,12 +3,15 @@
 #include "ALU.h"
 #include "control.h"
 #include "reservation.h"
+#include "physical_reg.h"
 
 #ifdef enable_debug
 #define debug(x) x
 #else
 #define debug(x) 
 #endif
+
+#define REG_COUNT 64
 
 class Processor {
     private:
@@ -24,6 +27,12 @@ class Processor {
         // reservation stations, see reservation.h
         // need to be initialized
         ReservationStation stationSet[4]; 
+
+        // create physical registers and reorder buffer
+        PhysicalRegisterUnit physRegFile = PhysicalRegisterUnit(REG_COUNT);       
+    
+        // common data bus is just a vector for simplicity, might need to do more 
+        std::vector<uint32_t> CommonDataBus;
 
         void single_cycle_processor_advance();
         void pipelined_processor_advance();
