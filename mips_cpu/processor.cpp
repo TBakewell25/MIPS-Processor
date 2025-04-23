@@ -36,9 +36,8 @@ void Processor::advance() {
     switch (opt_level) {
         case 0: single_cycle_processor_advance();
                 break;
-        case 1: pipelined_processor_advance();
+        case 2: ooo_advance();
                 break;
-        // other optimization levels go here
         default: break;
     }
 }
@@ -114,8 +113,6 @@ void Processor::single_cycle_processor_advance() {
     regfile.pc = control.jump_reg ? read_data_1 : control.jump ? (regfile.pc & 0xf0000000) & (addr << 2): regfile.pc;
 }
 
-void Processor::pipelined_processor_advance() {
-    // pipelined processor logic goes here
-    // does nothing currently -- if you call it from the cmd line, you'll run into an infinite loop
-    // might be helpful to implement stages in a separate module
+void Processor::ooo_advance() {
+
 }

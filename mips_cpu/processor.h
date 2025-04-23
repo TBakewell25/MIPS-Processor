@@ -35,7 +35,22 @@ class Processor {
         std::vector<uint32_t> CommonDataBus;
 
         void single_cycle_processor_advance();
-        void pipelined_processor_advance();
+        //void pipelined_processor_advance();
+        void ooo_advance();
+
+        /* OOO stages
+        *  Rename - register renaming through RAT
+        *  Dispatch - dispatch instructions to stationSet (reservation stations)
+        *  Execute - execution unit 
+        *  write_back - push to the CBD to broadcast
+        *  commit - commit completed, pipelined one
+        */
+
+        void rename();
+        void dispatch();
+        void execute();
+        void write_back();
+        void commit();
  
     public:
         Processor(Memory *mem) { regfile.pc = 0; memory = mem;}
@@ -51,4 +66,5 @@ class Processor {
 
         // Advances the processor to an appropriate state every cycle
         void advance(); 
+
 };
