@@ -1,3 +1,4 @@
+#include <queue>
 #include <cstdint>
 #include <iostream>
 #include "processor.h"
@@ -113,28 +114,32 @@ void Processor::single_cycle_processor_advance() {
     regfile.pc = control.jump_reg ? read_data_1 : control.jump ? (regfile.pc & 0xf0000000) & (addr << 2): regfile.pc;
 }
 
-void Processor::rename() {
+void Processor::fetch() {
     uint32_t instruction;
     bool instruction_read;
 
     // fetch instructions from the cache, exit and try again next cycle on miss
-    // send to reorder buffer otherwise
+    // send to instruction queue otherwise
     instruction_read = memory->access(regfile.pc, instruction, 0, 1, 0);
     if (!instruction_read)
         return;
     else 
-        physRegFile.enqueue(instruction);
+       instruction_queue.push(instruction); 
           
     // increment pc
     regfile.pc += 4;
 }
 
-void Processor::dispatch();
-void Processor::execute();
-void Processor::write_back();
-void Processor::commit();
+void Processor::rename(){
+
+}
+void Processor::dispatch(){}
+void Processor::execute(){}
+void Processor::write_back(){}
+void Processor::commit(){}
  
 void Processor::ooo_advance() {
+    fetch();
     rename();
     dispatch();
     execute();

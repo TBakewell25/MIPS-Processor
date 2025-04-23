@@ -6,6 +6,8 @@
 #define debug(x) 
 #endif
 
+#define ARCH_REG 32
+
 /*
 * A class to handle register allocation
 * for bothe phsyical and architectural
@@ -16,6 +18,34 @@
 
 class PhysicalRegisterUnit {
     private: 
+        // nested class to represent Register Alias Table
+        class RAT {
+            struct rat_line {
+                uint32_t arch_reg; // corresponding architectural register
+                std::vector<uint32_t>RAT; // mappings of arch registers to physical registers
+                bool in_use; 
+            };
+
+            // define a rat with ARCH_REG (usually 32) entries
+            rat_line rat[ARCH_REG];
+            
+            public:
+
+                RAT(int reg_count) {
+                    for (int i = 0; i < reg_count; i++) {
+                        rat[i].arch_reg = i;
+                        rat[i].in_use = false;
+                    }
+                }
+
+                bool ratIsUsed(uint32_t register_number) { return rat[register_number].in_use; }
+
+                void insertRAT(uint32_t register_number, uint32_t new_mapping) { rat[register_number].RAT.push_back(new_mapping); }
+ 
+                uint32_t popRAT(uint32_t register_number) { return rat[register_number].RAT.back(); }
+        };
+
+        RAT RAT_Unit = RAT(32);
 
         std::vector<uint32_t> physTable; // a table holding n many phsyical registers (32-bit each) 
         
@@ -32,6 +62,7 @@ class PhysicalRegisterUnit {
         PhysicalRegisterUnit(int reg_count) : physTable(reg_count, 0) {}
  
         // Enqueue operation
+        // 0 on success, -1 on error
         int enqueue(uint32_t value) {
             if (is_full) 
                 return -1;
@@ -39,10 +70,12 @@ class PhysicalRegisterUnit {
             reorderBuffer[tail] = value;
             tail = (tail + 1) % capacity;
         
-            // Check if buffer is now full
+            // Check if reorder buffer is now full
             if (head == tail) {
                 is_full = true;
             }
+
+            return 0;
         }
 
         // Dequeue operation
@@ -57,15 +90,15 @@ class PhysicalRegisterUnit {
             return value;
         }
 
-        // Check if buffer is empty
+        // Check if reorderbuffer is empty
         bool isEmpty() const {
             return (head == tail) && !is_full;
         }
 
-        // Check if buffer is full
+        // Check if reorderbuffer is full
         bool isFull() const { return is_full; }
 
-        // Get current size
+        // Get current size of reorder
         size_t size() const {
             if (is_full) 
                 return capacity;

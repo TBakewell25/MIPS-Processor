@@ -1,3 +1,4 @@
+#include <queue>
 #include "memory.h"
 #include "regfile.h"
 #include "ALU.h"
@@ -24,7 +25,10 @@ class Processor {
     
         uint32_t processor_pc; // an additional pc to track 
         //// OOO things
-   
+
+        // an instruction queue to get instructions from fetch to rename stages  
+        std::queue<uint32_t>instruction_queue;
+ 
         // reservation stations, see reservation.h
         // need to be initialized
         ReservationStation stationSet[4]; 
@@ -40,19 +44,20 @@ class Processor {
         void ooo_advance();
 
         /* OOO stages
+        *  Fetch - fetch instructions into reorder
         *  Rename - register renaming through RAT
         *  Dispatch - dispatch instructions to stationSet (reservation stations)
         *  Execute - execution unit 
         *  write_back - push to the CBD to broadcast
         *  commit - commit completed, pipelined one
         */
-
+        void fetch();
         void rename();
         void dispatch();
         void execute();
         void write_back();
         void commit();
- 
+
     public:
         Processor(Memory *mem) { regfile.pc = 0; memory = mem;}
 
@@ -67,5 +72,7 @@ class Processor {
 
         // Advances the processor to an appropriate state every cycle
         void advance(); 
+
+	
 
 };
