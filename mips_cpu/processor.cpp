@@ -2,6 +2,7 @@
 #include <cstdint>
 #include <iostream>
 #include "processor.h"
+
 using namespace std;
 
 #ifdef enable_debug
@@ -156,90 +157,112 @@ void Processor::fetch() {
 *       3. check resources (ROB, RS, RAT)
 *       4. Rename
 *       5. Create ROBEntry
-*       6. Push to RS
+*       6. Dispatch
 *       7. remove instruction
 */
 
 void Processor::rename(){
     // 1. peek at instruction
-    // TODO: currenty pops, needs to peek
-    uint32_t instruction = instruction_queue.pop_back();
+    uint32_t instruction = instruction_queue.front();
 
     // 2. decode peeked value
-    control_t control;
     control.decode(instruction);
 
-    // extract rs, rt, rd, imm, funct 
-    int opcode = (instruction >> 26) & 0x3f;
+    // extract rs, rt, rd
     int rs = (instruction >> 21) & 0x1f;
     int rt = (instruction >> 16) & 0x1f;
     int rd = (instruction >> 11) & 0x1f;
-    int shamt = (instruction >> 6) & 0x1f;
-    int funct = instruction & 0x3f;
-    uint32_t imm = (instruction & 0xffff);
-    int addr = instruction & 0x3ffffff;
+
+    int write_reg = control.reg_write ? rd : rt;
 
     // 3. check resources
-    // 0 arithmetic, 1 memory operation
-    int instr_type = getInstructionType(instruction); 
 
     // exit if there is no reorder buffer spot available
     // logic probably needs work
-    if (!nextState.checkReorderBuffer())
-        return;  
+    if (!nextState.check_reorderBuffer())
+        return; 
 
-    // check if we need to send this somewhere
-    // then check mappings to see if we can 
-    if (control.reg_dest) {
-        bool rat_availability = checkRAT(rd);
-        if (rat_availability)
-            pushToRat(rd, instruction);
-        else
-            return;
-    }
+    // check for availability of physical registers
+    if (control.reg_write && !nextState.physRegFile.checkFreePhys())
+        return;
 
+    // 0 arithmetic, 1 memory operation
+    int instr_type = checkInstructionType(instruction); 
+
+    // check availability of reservation stations
+    int available_station_a = -1;
+    int available_station_m = -1;
     switch(instr_type) {
-        case(0):
-            int available_station_a = nextState.checkStationArith();
+        case 0:
+            available_station_a = nextState.checkStationsArith();
             
-            if (available_station_a >= 0)
-                nextState.pushToArith(available_station_a, instruction);        
-            else
+            if (available_station_a < 0)
                 return;
             break;
 
-        case(1):
-            int available = nextState.checkStationMem();
+        case 1:
+            available_station_m = nextState.checkStationsMem();
             
-            if (available >= 0)
-                nextState.pushToMem(available_station_a, instruction);
-            else
+            if (available_station_m < 0)
                 return;
+            break;
+
+        default:
             break;
     }    
 
     // 4. Rename
 
-    // Variables to read data into
-    uint32_t read_data_1 = 0;
-    uint32_t read_data_2 = 0;
-    
-    // Read from reg file
-    regfile.access(rs, rt, read_data_1, read_data_2, 0, 0, 0);
+    // these represent a previous mapping and a new mapping
+    // initialize as illegal values (<0)
+    int new_phys_reg = -1;
+    int old_phys_reg = -1; 
 
-    // 5. Create ROBEntry
-    ROBEntry toBeSent = populateROBEntry(instruction,
-                     rd,
-                     phys_reg, // not implemented
-                     old_phys_reg) // not implemented
-    pushToROB(toBeSent);  
+    // allocate new regs
+    // should init these to usable vals
+    if (control.reg_write) {
+        new_phys_reg = nextState.physRegFile.allocatePhysReg();
+        old_phys_reg = nextState.physRegFile.getMapping(write_reg);
+    }
+        
+    // get physical registers for source operands
+    int phys_rs = rs != 0 ? nextState.physRegFile.getMapping(rs) : 0;
+    int phys_rt = rt != 0 ? nextState.physRegFile.getMapping(rt) : 0;
+
+    // map the arch write_reg to the allocated "new_phys_reg"
+    if (control.reg_write && write_reg != 0)
+        nextState.physRegFile.RAT_Unit.updateMapping(write_reg, new_phys_reg);
+
+
+    // now that we have actually read data from the reg file we can send along instructions
+    // TODO: need to be able to read from phys regs, not arch regs
+    // TODO: add actual way to push instruction data, not instruction itself.
  
-    // 6. done above, needs to be moved down here
+    // 5. Create ROBEntry
+    PhysicalRegisterUnit::ROBEntry toBeSent = populateROBEntry(instruction,
+                     rd,
+                     new_phys_reg, // not implemented
+                     old_phys_reg);// not implemented
 
-    // 7.
+    // 6. Dispatch
+    switch(instr_type) {
+        case 0:
+//            nextState.push_to_rs();
+            break;
+        case 1:
+//            nextState.push_to_rs();
+            break;
+        default:
+            break;
+    }
+
+    nextState.pushToROB(toBeSent);  
+ 
+
+    // 7. Remove Instruction
     instruction_queue.pop();
 }
-void Processor::dispatch(){}
+void Processor::issue(){}
 void Processor::execute(){}
 void Processor::write_back(){}
 void Processor::commit(){}
@@ -247,7 +270,7 @@ void Processor::commit(){}
 void Processor::ooo_advance() {
     fetch();
     rename();
-    dispatch();
+    issue();
     execute();
     write_back();
     commit();

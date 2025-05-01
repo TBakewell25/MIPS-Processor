@@ -32,8 +32,6 @@ class PhysicalRegisterUnit {
             uint32_t result;     // Result value
         };
 
-    private: 
-        // Register Alias Table implementation
         class RAT {
             private:
                 uint32_t mappings[ARCH_REG]; // Direct mapping from arch to physical register
@@ -67,8 +65,8 @@ class PhysicalRegisterUnit {
                 }
         };
 
-        RAT RAT_Unit;
 
+    private: 
         uint32_t physTable[ARCH_REG * 4]; // a table holding n many physical registers (32-bit each) 
 
         std::vector<uint32_t>freePhysRegs;
@@ -85,6 +83,13 @@ class PhysicalRegisterUnit {
         bool is_full;
 
     public:
+
+        // Register Alias Table implementation
+        RAT RAT_Unit;
+
+        int getMapping(uint32_t arch_reg) { return RAT_Unit.getLiveMapping(arch_reg); }
+
+        bool checkFreePhys() { return freePhysRegs.empty(); }
         // constructor -- initializes values for starting execution
         PhysicalRegisterUnit(int reg_count) {
 

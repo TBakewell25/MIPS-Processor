@@ -44,17 +44,16 @@ class Processor {
     
     
             // Free list for physical registers
-            std::queue<int> freePhysRegs;
+//            std::queue<int> freePhysRegs;
 
-            // create physical registers and reorder buffer
-            PhysicalRegisterUnit physRegFile = PhysicalRegisterUnit(REG_COUNT);       
-    
             // Common Data Bus signals
             bool CDB_valid;
             int CDB_phys_reg;
             uint32_t CDB_value;
 
             public:
+                // create physical registers and reorder buffer
+                PhysicalRegisterUnit physRegFile = PhysicalRegisterUnit(REG_COUNT);       
 
                 // check for opening in state's instance of the ROB
                 bool check_reorderBuffer() { return physRegFile.isFull(); }
@@ -110,7 +109,7 @@ class Processor {
         */
         void fetch();
         void rename();
-        void dispatch();
+        void issue();
         void execute();
         void write_back();
         void commit();
@@ -146,5 +145,9 @@ class Processor {
 
             return new_entry;
          }    
+
+         //STUBS
+
+         void push_to_rs() { return; }
  
 };

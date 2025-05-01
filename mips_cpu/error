@@ -2,65 +2,47 @@ g++ -g -Wall -std=c++11    -c -o processor.o processor.cpp
 In file included from processor.h:7,
                  from processor.cpp:4:
 physical_reg.h: In member function ‘void PhysicalRegisterUnit::completeROBEntry(int, uint32_t)’:
-physical_reg.h:186:44: warning: comparison of integer expressions of different signedness: ‘int’ and ‘std::vector<PhysicalRegisterUnit::ROBEntry>::size_type’ {aka ‘long unsigned int’} [-Wsign-compare]
-  186 |             if (rob_index < 0 || rob_index >= reorderBuffer.size())
+physical_reg.h:191:44: warning: comparison of integer expressions of different signedness: ‘int’ and ‘std::vector<PhysicalRegisterUnit::ROBEntry>::size_type’ {aka ‘long unsigned int’} [-Wsign-compare]
+  191 |             if (rob_index < 0 || rob_index >= reorderBuffer.size())
       |                                  ~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~
+In file included from processor.cpp:5:
+physical_reg.h: At global scope:
+physical_reg.h:23:7: error: redefinition of ‘class PhysicalRegisterUnit’
+   23 | class PhysicalRegisterUnit {
+      |       ^~~~~~~~~~~~~~~~~~~~
+physical_reg.h:23:7: note: previous definition of ‘class PhysicalRegisterUnit’
+   23 | class PhysicalRegisterUnit {
+      |       ^~~~~~~~~~~~~~~~~~~~
 processor.cpp: In member function ‘void Processor::rename()’:
-processor.cpp:166:46: error: ‘class std::queue<unsigned int>’ has no member named ‘pop_back’
-  166 |     uint32_t instruction = instruction_queue.pop_back();
-      |                                              ^~~~~~~~
-processor.cpp:184:22: error: ‘getInstructionType’ was not declared in this scope; did you mean ‘checkInstructionType’?
-  184 |     int instr_type = getInstructionType(instruction);
-      |                      ^~~~~~~~~~~~~~~~~~
-      |                      checkInstructionType
-processor.cpp:188:20: error: ‘class Processor::State’ has no member named ‘checkReorderBuffer’; did you mean ‘check_reorderBuffer’?
-  188 |     if (!nextState.checkReorderBuffer())
-      |                    ^~~~~~~~~~~~~~~~~~
-      |                    check_reorderBuffer
-processor.cpp:194:33: error: ‘checkRAT’ was not declared in this scope
-  194 |         bool rat_availability = checkRAT(rd);
-      |                                 ^~~~~~~~
-processor.cpp:196:13: error: ‘pushToRat’ was not declared in this scope; did you mean ‘ushort’?
-  196 |             pushToRat(rd, instruction);
-      |             ^~~~~~~~~
-      |             ushort
-processor.cpp:203:49: error: ‘class Processor::State’ has no member named ‘checkStationArith’; did you mean ‘checkStationsArith’?
-  203 |             int available_station_a = nextState.checkStationArith();
-      |                                                 ^~~~~~~~~~~~~~~~~
-      |                                                 checkStationsArith
-processor.cpp:206:27: error: ‘class Processor::State’ has no member named ‘pushToArith’
-  206 |                 nextState.pushToArith(available_station_a, instruction);
-      |                           ^~~~~~~~~~~
-processor.cpp:211:15: error: jump to case label
-  211 |         case(1):
-      |               ^
-processor.cpp:203:17: note:   crosses initialization of ‘int available_station_a’
-  203 |             int available_station_a = nextState.checkStationArith();
+processor.cpp:201:14: error: jump to case label
+  201 |         case 1:
+      |              ^
+processor.cpp:195:17: note:   crosses initialization of ‘int available_station_a’
+  195 |             int available_station_a = nextState.checkStationsArith();
       |                 ^~~~~~~~~~~~~~~~~~~
-processor.cpp:212:39: error: ‘class Processor::State’ has no member named ‘checkStationMem’; did you mean ‘checkStationsMem’?
-  212 |             int available = nextState.checkStationMem();
-      |                                       ^~~~~~~~~~~~~~~
-      |                                       checkStationsMem
-processor.cpp:215:27: error: ‘class Processor::State’ has no member named ‘pushToMem’; did you mean ‘pushToROB’?
-  215 |                 nextState.pushToMem(available_station_a, instruction);
-      |                           ^~~~~~~~~
-      |                           pushToROB
-processor.cpp:231:5: error: ‘ROBEntry’ was not declared in this scope
-  231 |     ROBEntry toBeSent = populateROBEntry(instruction,
-      |     ^~~~~~~~
-processor.cpp:173:9: warning: unused variable ‘opcode’ [-Wunused-variable]
-  173 |     int opcode = (instruction >> 26) & 0x3f;
-      |         ^~~~~~
-processor.cpp:177:9: warning: unused variable ‘shamt’ [-Wunused-variable]
-  177 |     int shamt = (instruction >> 6) & 0x1f;
-      |         ^~~~~
-processor.cpp:178:9: warning: unused variable ‘funct’ [-Wunused-variable]
-  178 |     int funct = instruction & 0x3f;
-      |         ^~~~~
-processor.cpp:179:14: warning: unused variable ‘imm’ [-Wunused-variable]
-  179 |     uint32_t imm = (instruction & 0xffff);
-      |              ^~~
-processor.cpp:180:9: warning: unused variable ‘addr’ [-Wunused-variable]
-  180 |     int addr = instruction & 0x3ffffff;
-      |         ^~~~
+processor.cpp:220:9: error: ‘old_phsy_reg’ was not declared in this scope; did you mean ‘old_phys_reg’?
+  220 |         old_phsy_reg = nextState.physRegFile.getMapping(write_reg);
+      |         ^~~~~~~~~~~~
+      |         old_phys_reg
+processor.cpp:229:31: error: ‘PhysicalRegisterUnit::RAT PhysicalRegisterUnit::RAT_Unit’ is private within this context
+  229 |         nextState.physRegFile.RAT_Unit.updateMapping(write_reg, new_phys_reg);
+      |                               ^~~~~~~~
+physical_reg.h:71:13: note: declared private here
+   71 |         RAT RAT_Unit;
+      |             ^~~~~~~~
+processor.cpp:245:23: error: ‘class Processor::State’ has no member named ‘push_to_rs’
+  245 |             nextState.push_to_rs();
+      |                       ^~~~~~~~~~
+processor.cpp:248:23: error: ‘class Processor::State’ has no member named ‘push_to_rs’
+  248 |             nextState.push_to_rs();
+      |                       ^~~~~~~~~~
+processor.cpp:252:5: error: ‘pushToROB’ was not declared in this scope
+  252 |     pushToROB(toBeSent);
+      |     ^~~~~~~~~
+processor.cpp:224:9: warning: unused variable ‘phys_rs’ [-Wunused-variable]
+  224 |     int phys_rs = rs != 0 ? nextState.physRegFile.getMapping(rs) : 0;
+      |         ^~~~~~~
+processor.cpp:225:9: warning: unused variable ‘phys_rt’ [-Wunused-variable]
+  225 |     int phys_rt = rt != 0 ? nextState.physRegFile.getMapping(rt) : 0;
+      |         ^~~~~~~
 make: *** [<builtin>: processor.o] Error 1
