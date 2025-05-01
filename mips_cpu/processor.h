@@ -12,7 +12,7 @@
 #define debug(x) 
 #endif
 
-#define REG_COUNT 64
+// define REG_COUNT 64 , defined in physical_reg.h
 #define ARITHM_STATIONS 4
 #define MEM_STATIONS 2
 
@@ -63,10 +63,12 @@ class Processor {
                 void pushToROB(PhysicalRegisterUnit::ROBEntry item) { physRegFile.enqueue(item); }
 
                 // push to any available arithmetic reservation stations
-                void pushToArith(int index, uint32_t instruction) { ArithmeticStations[index] = instruction; }
+                // TODO: create some sort of arith station class or something idk
+                //void pushToArith(int index, uint32_t instruction) { ArithmeticStations[index].queue.push_back(instruction); }
               
                 // push to any available memory stations 
-                void pushToMem(int index, uint32_t instruction) { MemoryStations[index] = instruction; }
+                // TODO: create some sort of mem station class or something idk
+                //void pushToMem(int index, uint32_t instruction) { MemoryStations[index].queue.push_back(instruction); }
 
                 int checkStationsArith() {
                     for (int i = 0; i < ARITHM_STATIONS; ++i) {
@@ -133,7 +135,7 @@ class Processor {
                                   int phys_reg,   
                                   int old_phys_reg) {
 
-            ROBEntry new_entry;
+            PhysicalRegisterUnit::ROBEntry new_entry;
             new_entry.instruction = instruction;
             new_entry.dest_reg = dest_reg;
             new_entry.phys_reg = phys_reg;

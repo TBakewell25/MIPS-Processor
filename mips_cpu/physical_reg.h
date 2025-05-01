@@ -8,6 +8,9 @@
 #endif
 
 #define ARCH_REG 32
+#define REG_COUNT 128
+
+// 32 architectural registers mapping to up to 128 physical ones
 
 /*
 * A class to handle register allocation
@@ -67,7 +70,9 @@ class PhysicalRegisterUnit {
         RAT RAT_Unit;
 
         uint32_t physTable[ARCH_REG * 4]; // a table holding n many physical registers (32-bit each) 
-        uint32_t freePhysRegs[ARCH_REG * 4]; // free list of physical registers
+
+        std::vector<uint32_t>freePhysRegs;
+        //uint32_t freePhysRegs[ARCH_REG * 4]; // free list of physical registers
         bool regReady[REG_COUNT];          // is the register value ready?
 
         // Reorder Buffer (ROB)
@@ -81,19 +86,15 @@ class PhysicalRegisterUnit {
 
     public:
         // constructor -- initializes values for starting execution
-        PhysicalRegisterUnit(int reg_count) : 
-            physTable(reg_count, 0), 
-            RAT_Unit(reg_count),
-            head(0), 
-            tail(0), 
-            count(0), 
-            capacity(reg_count),
-            is_full(false) {
+        PhysicalRegisterUnit(int reg_count) {
+
+            head = tail = count = capacity = 0;
+            is_full = false;
             
             reorderBuffer.resize(capacity);
             
             for (int i = ARCH_REG; i < reg_count; i++) 
-                freePhysRegs.push(i);
+                freePhysRegs.push_back(i);
             
             for (int i = 0; i < reg_count; i++)
                 regReady[i] = (i < ARCH_REG); // should be all true
@@ -135,7 +136,7 @@ class PhysicalRegisterUnit {
         bool isFull() const { return is_full; }
 
         // Get current size of reorder
-        size_t size() const {
+        int size() const {
             if (is_full) 
                 return capacity;
             
@@ -148,7 +149,7 @@ class PhysicalRegisterUnit {
                 return -1; // no free registers
                 
             int reg = freePhysRegs.front();
-            freePhysRegs.pop();
+            freePhysRegs.pop_back();
             regReady[reg] = false; // not ready until written
             return reg;
         }
@@ -156,7 +157,7 @@ class PhysicalRegisterUnit {
         // free a physical register
         void freePhysReg(int reg) {
             if (reg >= ARCH_REG)
-                freePhysRegs.push(reg);
+                freePhysRegs.push_back(reg);
         }
 
         // set a register as ready with its value
