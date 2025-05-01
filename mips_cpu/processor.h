@@ -60,7 +60,7 @@ class Processor {
                 bool check_reorderBuffer() { return physRegFile.isFull(); }
 
                 // push to state's instance of ROB
-                void pushToROB(ROBEntry item) { reorderBuffer.enqueue(item); }
+                void pushToROB(PhysicalRegisterUnit::ROBEntry item) { physRegFile.enqueue(item); }
 
                 // push to any available arithmetic reservation stations
                 void pushToArith(int index, uint32_t instruction) { ArithmeticStations[index] = instruction; }
@@ -128,7 +128,7 @@ class Processor {
         // Advances the processor to an appropriate state every cycle
         void advance(); 
 
-        ROBEntry populateROBEntry(uint32_t instruction,
+        PhysicalRegisterUnit::ROBEntry populateROBEntry(uint32_t instruction,
                                   int dest_reg,  
                                   int phys_reg,   
                                   int old_phys_reg) {
@@ -139,7 +139,7 @@ class Processor {
             new_entry.phys_reg = phys_reg;
             new_entry.old_phys_reg = old_phys_reg;
             new_entry.completed = false;
-            new_entry.read_to_commit = false;
+            new_entry.ready_to_commit = false;
             new_entry.result = 0;
 
             return new_entry;
