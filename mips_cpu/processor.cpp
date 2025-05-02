@@ -244,13 +244,14 @@ void Processor::rename(){
                      new_phys_reg, // not implemented
                      old_phys_reg);// not implemented
 
+    
     // 6. Dispatch
     switch(instr_type) {
         case 0:
-//            nextState.push_to_rs();
+            nextState.pushToArith(instruction);
             break;
         case 1:
-//            nextState.push_to_rs();
+            nextState.pushToMem(instruction);
             break;
         default:
             break;

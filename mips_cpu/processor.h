@@ -28,6 +28,7 @@ class Processor {
         uint32_t processor_pc; // an additional pc to track 
         //// OOO things
 
+        
         /* States like with pipeline
         * will theoretically be needed for:
         *    -reservation stations
@@ -61,14 +62,6 @@ class Processor {
                 // push to state's instance of ROB
                 void pushToROB(PhysicalRegisterUnit::ROBEntry item) { physRegFile.enqueue(item); }
 
-                // push to any available arithmetic reservation stations
-                // TODO: create some sort of arith station class or something idk
-                //void pushToArith(int index, uint32_t instruction) { ArithmeticStations[index].queue.push_back(instruction); }
-              
-                // push to any available memory stations 
-                // TODO: create some sort of mem station class or something idk
-                //void pushToMem(int index, uint32_t instruction) { MemoryStations[index].queue.push_back(instruction); }
-
                 int checkStationsArith() {
                     for (int i = 0; i < ARITHM_STATIONS; ++i) {
                         if (!ArithmeticStations[i].checkStation())
@@ -84,6 +77,25 @@ class Processor {
                     }
                     return -1;
                 }
+
+                void pushToArith(uint32_t instruction) {
+                    for (int i = 0; i < ARITHM_STATIONS; ++i) {
+                        if (!ArithmeticStations[i].checkStation()) {
+                            ArithmeticStations[i].setInstruction(instruction);
+                            ArithmeticStations[i].setInUse();
+                        }
+                    }
+                }
+
+                void pushToMem(uint32_t instruction) {
+                    for (int i = 0; i < MEM_STATIONS; ++i) {
+                        if (!MemoryStations[i].checkStation()) {
+                            MemoryStations[i].setInstruction(instruction);
+                            MemoryStations[i].setInUse();
+                        }
+                    }
+                }
+
         };
    
         State currentState;
