@@ -38,19 +38,30 @@ class Processor {
         *    -functional units
         */
 
+        struct CDBEntry {
+            bool valid;
+            int phys_reg; // physical reg being written to, check for dependencies
+            uint32_t result;
+
+            // invalid entry constructor
+            CDBEntry() : valid(false), phys_reg(0), value(0), exception(false) {}
+    
+            // valid entry constructor
+            CDBEntry(int reg, uint32_t val) : 
+                valid(true), phys_reg(reg), value(val), exception(false) {}
+        };
+
         class State {
             // Reservation Stations
             ReservationStation ArithmeticStations[ARITHM_STATIONS];
             ReservationStation MemoryStations[MEM_STATIONS];
-    
-    
-            // Free list for physical registers
-//            std::queue<int> freePhysRegs;
 
-            // Common Data Bus signals
+            CDBEntry CDB[MEM_STATIONS + ARITHM_STATIONS];
+    
+            /* Common Data Bus signals
             bool CDB_valid;
             int CDB_phys_reg;
-            uint32_t CDB_value;
+            uint32_t CDB_value; */
 
             public:
                 // create physical registers and reorder buffer
@@ -92,6 +103,37 @@ class Processor {
                         if (!MemoryStations[i].checkStation()) {
                             MemoryStations[i].setInstruction(instruction);
                             MemoryStations[i].setInUse();
+                        }
+                    }
+                }
+               
+                // wakeup every station
+                void wakeUpRS(int phys_reg, uint32_t value) {
+                    int stations = MEM_STATIONS + ARITHM_STATIONS;
+                    for (int i = 0; i < stations; ++i) {
+                        bool arith = i < ARITHM_STATIONS;
+                        int index = i < ARITHM_STATIONS ? i : i % ARITHM_STATIONS;
+
+                        ReservationStation &rs;
+                        if (arith)
+                            rs = ArithmeticStations[index];
+                        else
+                            rs = MemoryStations[index];
+
+                        if (rs.checkStation()) {
+                            // update source if waiting on this tag
+
+                            // if the source isn't ready, and its the same as our physical register
+                            if (!rs.ready_rs && rs.phys_rs == phys_reg) {
+                                rs.ready_rs = true;
+                                rs.rs_val = value;
+                            }
+                 
+                            // if the rt isn't ready, and its the same as our physical
+                            if (!rs.read_rt && rs.phys_rt == phys_reg) {
+                                rs.ready_rt = true;
+                                rs.rrt_val = value;
+                            }
                         }
                     }
                 }

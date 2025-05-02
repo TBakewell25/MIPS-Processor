@@ -11,7 +11,9 @@ using namespace std;
 #define debug(x) 
 #endif
 
-       
+#define EXEC_UNITS 6      
+#define ARITHM_STATIONS 4
+#define MEM_STATIONS 2 
 
 void Processor::initialize(int level) {
     // Initialize Control
@@ -263,8 +265,64 @@ void Processor::rename(){
     // 7. Remove Instruction
     instruction_queue.pop();
 }
-void Processor::issue(){}
-void Processor::execute(){}
+
+/*
+*   Steps for issue stage:
+*       1. Monitor results
+*       2. Check stations
+*       3. Select instruction
+*       4. Dispatch to execution unit
+*/
+
+
+void Processor::issue(){
+
+    // 1. Monitor results (on CDB)
+    for (int i = 0; i < EXEC_UNITS; ++i) {
+        if (state.CDB[i].valid) {
+            // wake up whatever station is waiting
+            wakeUpRS(state.CDB[i].phys_reg, state.CDB[i].value);
+            CDB[i].valid = false;
+         }
+    }
+
+    // 2. Check stations
+    std::vector<int> ready_arith_rs;
+    std::vector<int> ready_mem_rs;
+
+    // populate all available arithm stations
+    for (int j = 0; j < ARITHM_STATIONS; ++j) {
+        if (currentState.arith_rs[j].busy && 
+            !currentState.arith_rs[j].executing &&
+            currentState.arith_rs[j].rs_ready && 
+            currentState.arith_rs[j].rt_ready) {
+            ready_arith_rs.push_back(j);
+        }
+    }
+
+    // populate all available mem stations
+    for (int n = 0; n < MEM_STATIONS; ++n) {
+        if (currentState.mem_rs[n].busy && 
+            !currentState.mem_rs[n].executing &&
+            currentState.mem_rs[n].rs_ready && 
+            currentState.mem_rs[n].rt_ready) {
+            ready_mem_rs.push_back(n);
+        }
+    }
+
+    // 4. Dispatch to execution unit
+    issueToExecutionUnits(ready_arith_rs, ready_mem_rs);
+   
+}
+
+void Processor::execute(){
+    uint32_t operand_1 = control.shift ? shamt : read_data_1;
+    uint32_t operand_2 = control.ALU_src ? imm : read_data_2;
+    uint32_t alu_zero = 0;
+
+    uint32_t alu_result = alu.execute(operand_1, operand_2, alu_zero);
+}
+
 void Processor::write_back(){}
 void Processor::commit(){}
  
