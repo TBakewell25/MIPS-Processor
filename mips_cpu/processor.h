@@ -5,6 +5,7 @@
 #include "control.h"
 #include "reservation.h"
 #include "physical_reg.h"
+#include "execution_unit.h"
 
 #ifdef enable_debug
 #define debug(x) x
@@ -41,14 +42,15 @@ class Processor {
         struct CDBEntry {
             bool valid;
             int phys_reg; // physical reg being written to, check for dependencies
+            uint32_t value;
             uint32_t result;
 
             // invalid entry constructor
-            CDBEntry() : valid(false), phys_reg(0), value(0), exception(false) {}
+            CDBEntry() : valid(false), phys_reg(0), value(0) {}
     
             // valid entry constructor
             CDBEntry(int reg, uint32_t val) : 
-                valid(true), phys_reg(reg), value(val), exception(false) {}
+                valid(true), phys_reg(reg), value(val)  {}
         };
 
         class State {
@@ -64,6 +66,42 @@ class Processor {
             uint32_t CDB_value; */
 
             public:
+
+                void issueToExecutionUnits(std::vector<int>& ready_arith_rs, std::vector<int>& ready_mem_rs) {
+                    // issue to arithmetic unit
+                    if (!ready_arith_rs.empty()) {
+                        // select first available station
+                        int selected_station = ready_arith_rs[0];
+                        ArithmeticStations[selected_station].executing = true;
+
+
+                        uint32_t instruction = ArithmeticStations[rs_idx].instruction;
+                        uint32_t rs_val = ArithmeticStations[rs_idx].rs_val;
+                        uint32_t rt_val = ArithmeticStations[rs_idx].rt_val;
+        
+                       // send to execution unit (will be processed in execute stage)
+                       // store which reservation station this came from for writeback
+                       ArithmeticUnit.issueInstruction(instruction, rs_val, rt_val, rs_idx);
+                          
+                    }
+                    // issue to memory station
+                    if (!ready_mem_rs.empty()) {
+                        int selected_station = ready_arith_rs[0];
+                        ArithmeticStations[selected_station].executing = true;
+
+
+                        uint32_t instruction = ArithmeticStations[rs_idx].instruction;
+                        uint32_t rs_val = ArithmeticStations[rs_idx].rs_val;
+                        uint32_t rt_val = ArithmeticStations[rs_idx].rt_val;
+        
+                       // send to execution unit (will be processed in execute stage)
+                       // store which reservation station this came from for writeback
+                       ArithmeticUnit.issueInstruction(instruction, rs_val, rt_val, rs_idx);
+                    }
+                }
+
+    
+
                 // create physical registers and reorder buffer
                 PhysicalRegisterUnit physRegFile = PhysicalRegisterUnit(REG_COUNT);       
 
@@ -131,8 +169,8 @@ class Processor {
                  
                             // if the rt isn't ready, and its the same as our physical
                             if (!rs.read_rt && rs.phys_rt == phys_reg) {
-                                rs.ready_rt = true;
-                                rs.rrt_val = value;
+                                rs.read_rt = true;
+                                rs.rt_val = value;
                             }
                         }
                     }
