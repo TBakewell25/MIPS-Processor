@@ -279,10 +279,10 @@ void Processor::issue(){
 
     // 1. Monitor results (on CDB)
     for (int i = 0; i < EXEC_UNITS; ++i) {
-        if (state.CDB[i].valid) {
+        if (currentState.CDB[i].valid) {
             // wake up whatever station is waiting
-            wakeUpRS(state.CDB[i].phys_reg, state.CDB[i].value);
-            CDB[i].valid = false;
+            currentState.wakeUpRS(currentState.CDB[i].phys_reg, currentState.CDB[i].value);
+            currentState.CDB[i].valid = false;
          }
     }
 
@@ -292,35 +292,37 @@ void Processor::issue(){
 
     // populate all available arithm stations
     for (int j = 0; j < ARITHM_STATIONS; ++j) {
-        if (currentState.arith_rs[j].busy && 
-            !currentState.arith_rs[j].executing &&
-            currentState.arith_rs[j].rs_ready && 
-            currentState.arith_rs[j].rt_ready) {
+        if (currentState.ArithmeticStations[j].in_use && 
+            !currentState.ArithmeticStations[j].executing &&
+            currentState.ArithmeticStations[j].ready_rs && 
+            currentState.ArithmeticStations[j].ready_rt) {
             ready_arith_rs.push_back(j);
         }
     }
 
     // populate all available mem stations
     for (int n = 0; n < MEM_STATIONS; ++n) {
-        if (currentState.mem_rs[n].busy && 
-            !currentState.mem_rs[n].executing &&
-            currentState.mem_rs[n].rs_ready && 
-            currentState.mem_rs[n].rt_ready) {
+        if (currentState.MemoryStations[n].in_use && 
+            !currentState.MemoryStations[n].executing &&
+            currentState.MemoryStations[n].ready_rs && 
+            currentState.MemoryStations[n].ready_rt) {
             ready_mem_rs.push_back(n);
         }
     }
 
     // 4. Dispatch to execution unit
-    issueToExecutionUnits(ready_arith_rs, ready_mem_rs);
+    currentState.issueToExecutionUnits(ready_arith_rs, ready_mem_rs);
    
 }
 
 void Processor::execute(){
+/*
     uint32_t operand_1 = control.shift ? shamt : read_data_1;
     uint32_t operand_2 = control.ALU_src ? imm : read_data_2;
     uint32_t alu_zero = 0;
 
-    uint32_t alu_result = alu.execute(operand_1, operand_2, alu_zero);
+    uint32_t alu_result = alu.execute(operand_1, operand_2, alu_zero)
+*/;
 }
 
 void Processor::write_back(){}

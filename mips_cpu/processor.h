@@ -54,21 +54,21 @@ class Processor {
         };
 
         class State {
-            // Reservation Stations
-            ReservationStation ArithmeticStations[ARITHM_STATIONS];
-            ReservationStation MemoryStations[MEM_STATIONS];
-
-            ExecutionUnit ArithUnits[4];
-            ExecutionUnit MemUnits[2];
-
-            CDBEntry CDB[MEM_STATIONS + ARITHM_STATIONS];
-    
-            /* Common Data Bus signals
-            bool CDB_valid;
-            int CDB_phys_reg;
-            uint32_t CDB_value; */
-
             public:
+                // Reservation Stations
+                ReservationStation ArithmeticStations[ARITHM_STATIONS];
+                ReservationStation MemoryStations[MEM_STATIONS];
+
+                ExecutionUnit ArithUnits[4];
+                ExecutionUnit MemUnits[2];
+
+                CDBEntry CDB[MEM_STATIONS + ARITHM_STATIONS];
+    
+                /* Common Data Bus signals
+                bool CDB_valid;
+                int CDB_phys_reg;
+                uint32_t CDB_value; */
+
 
                 void issueToExecutionUnits(std::vector<int>& ready_arith_rs, std::vector<int>& ready_mem_rs) {
                     // issue to arithmetic unit
@@ -175,8 +175,8 @@ class Processor {
                             }
                  
                             // if the rt isn't ready, and its the same as our physical
-                            if (!rs.read_rt && rs.phys_rt == phys_reg) {
-                                rs.read_rt = true;
+                            if (!rs.ready_rt && rs.phys_rt == phys_reg) {
+                                rs.ready_rt = true;
                                 rs.rt_val = value;
                             }
                         }
