@@ -71,7 +71,7 @@ class Processor {
                 uint32_t CDB_value; */
 
                 int findOpenCDB() {
-                    for (int i = 0; i < MEM_STATIONS + ARITHM_STATIONS)
+                    for (int i = 0; i < MEM_STATIONS + ARITHM_STATIONS; ++i)
                        // potential logic issues
                        if (!CDB[i].valid) return i;
                     return -1;

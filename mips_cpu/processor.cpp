@@ -322,7 +322,7 @@ void Processor::issue(){
 
 void Processor::execute(){
     for (int j = 0; j < 4; ++j) {
-        ExecutionUnit currentUnit = currentState.ArithUnit[j];
+        ExecutionUnit currentUnit = currentState.ArithUnits[j];
         // execute the instruction
         currentUnit.execute();
 
@@ -335,15 +335,15 @@ void Processor::execute(){
         int free_cdb_entry = currentState.findOpenCDB();
 
         // we need to transfer metadata from rs to new cdb entry to broadcast
-        int phys_dest = ArithmeticStations[source_station].src_rs;
-        nextState.CDB[fee_cdb_entry] = CDBEntry(phys_dest, result);
+        int phys_dest = currentState.ArithmeticStations[source_station].phys_rd;
+        nextState.CDB[free_cdb_entry] = CDBEntry(phys_dest, result);
 
         // IMPLEMENT ME
-        markROBEntryCompleted(phys_dest, result);
+//       markROBEntryCompleted(phys_dest, result);
     }
 
     for (int j = 0; j < 2; ++j) {
-        ExecutionUnit currentUnit = currentState.MemUnit[j];
+        ExecutionUnit currentUnit = currentState.MemUnits[j];
         // execute the instruction
         currentUnit.execute();
 
@@ -356,11 +356,11 @@ void Processor::execute(){
         int free_cdb_entry = currentState.findOpenCDB();
 
         // we need to transfer metadata from rs to new cdb entry to broadcast
-        int phys_dest = ArithmeticStations[source_station].src_rs;
-        nextState.CDB[fee_cdb_entry] = CDBEntry(phys_dest, result);
+        int phys_dest = currentState.ArithmeticStations[source_station].phys_rd;
+        nextState.CDB[free_cdb_entry] = CDBEntry(phys_dest, result);
 
         // IMPLEMENT ME
-        markROBEntryCompleted(phys_dest, result);
+//        markROBEntryCompleted(phys_dest, result);
     }
 }
 
