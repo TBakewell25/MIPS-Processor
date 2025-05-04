@@ -364,7 +364,11 @@ void Processor::execute(){
     }
 }
 
-void Processor::write_back(){}
+void Processor::write_back(){
+    // this basically does nothing right now, needs serious work
+    nextState.physRegFile.updateReadyToCommit();
+}
+
 void Processor::commit(){}
  
 void Processor::ooo_advance() {
