@@ -274,7 +274,6 @@ void Processor::rename(){
 *       4. Dispatch to execution unit
 */
 
-
 void Processor::issue(){
 
     // 1. Monitor results (on CDB)
@@ -315,14 +314,54 @@ void Processor::issue(){
    
 }
 
-void Processor::execute(){
 /*
-    uint32_t operand_1 = control.shift ? shamt : read_data_1;
-    uint32_t operand_2 = control.ALU_src ? imm : read_data_2;
-    uint32_t alu_zero = 0;
+*   Steps for execute stage:
+*       1. Check for available units
+*       2. Do execution on available units
+*/
 
-    uint32_t alu_result = alu.execute(operand_1, operand_2, alu_zero)
-*/;
+void Processor::execute(){
+    for (int j = 0; j < 4; ++j) {
+        ExecutionUnit currentUnit = currentState.ArithUnit[j];
+        // execute the instruction
+        currentUnit.execute();
+
+        // get the result and the original RS
+        uint32_t result = currentUnit.getResult();
+        int source_station = currentUnit.getSourceRS(); 
+
+        // queue of for writeback (make CDB entry)
+        // TODO: handle no open cdb entry
+        int free_cdb_entry = currentState.findOpenCDB();
+
+        // we need to transfer metadata from rs to new cdb entry to broadcast
+        int phys_dest = ArithmeticStations[source_station].src_rs;
+        nextState.CDB[fee_cdb_entry] = CDBEntry(phys_dest, result);
+
+        // IMPLEMENT ME
+        markROBEntryCompleted(phys_dest, result);
+    }
+
+    for (int j = 0; j < 2; ++j) {
+        ExecutionUnit currentUnit = currentState.MemUnit[j];
+        // execute the instruction
+        currentUnit.execute();
+
+        // get the result and the original RS
+        uint32_t result = currentUnit.getResult();
+        int source_station = currentUnit.getSourceRS(); 
+
+        // queue of for writeback (make CDB entry)
+        // TODO: handle no open cdb entry
+        int free_cdb_entry = currentState.findOpenCDB();
+
+        // we need to transfer metadata from rs to new cdb entry to broadcast
+        int phys_dest = ArithmeticStations[source_station].src_rs;
+        nextState.CDB[fee_cdb_entry] = CDBEntry(phys_dest, result);
+
+        // IMPLEMENT ME
+        markROBEntryCompleted(phys_dest, result);
+    }
 }
 
 void Processor::write_back(){}

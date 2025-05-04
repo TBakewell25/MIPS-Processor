@@ -53,6 +53,7 @@ class Processor {
                 valid(true), phys_reg(reg), value(val)  {}
         };
 
+
         class State {
             public:
                 // Reservation Stations
@@ -69,7 +70,12 @@ class Processor {
                 int CDB_phys_reg;
                 uint32_t CDB_value; */
 
-
+                int findOpenCDB() {
+                    for (int i = 0; i < MEM_STATIONS + ARITHM_STATIONS)
+                       // potential logic issues
+                       if (!CDB[i].valid) return i;
+                    return -1;
+                }
                 void issueToExecutionUnits(std::vector<int>& ready_arith_rs, std::vector<int>& ready_mem_rs) {
                     // issue to arithmetic unit
                     if (!ready_arith_rs.empty()) {
