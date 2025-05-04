@@ -58,6 +58,9 @@ class Processor {
             ReservationStation ArithmeticStations[ARITHM_STATIONS];
             ReservationStation MemoryStations[MEM_STATIONS];
 
+            ExecutionUnit ArithUnits[4];
+            ExecutionUnit MemUnits[2];
+
             CDBEntry CDB[MEM_STATIONS + ARITHM_STATIONS];
     
             /* Common Data Bus signals
@@ -75,19 +78,20 @@ class Processor {
                         ArithmeticStations[selected_station].executing = true;
 
 
-                        uint32_t instruction = ArithmeticStations[rs_idx].instruction;
-                        uint32_t rs_val = ArithmeticStations[rs_idx].rs_val;
-                        uint32_t rt_val = ArithmeticStations[rs_idx].rt_val;
+                        uint32_t instruction = ArithmeticStations[selected_station].instruction;
+                        uint32_t rs_val = ArithmeticStations[selected_station].rs_val;
+                        uint32_t rt_val = ArithmeticStations[selected_station].rt_val;
         
                        // send to execution unit (will be processed in execute stage)
                        // store which reservation station this came from for writeback
-                       ArithmeticUnit.issueInstruction(instruction, rs_val, rt_val, rs_idx);
+                       // TODO: currently only issues to first 
+                       ArithUnits[0].issueInstruction(instruction, rs_val, rt_val, selected_station);
                           
                     }
                     // issue to memory station
                     if (!ready_mem_rs.empty()) {
-                        int selected_station = ready_arith_rs[0];
-                        ArithmeticStations[selected_station].executing = true;
+                        int rs_idx = ready_arith_rs[0];
+                        ArithmeticStations[rs_idx].executing = true;
 
 
                         uint32_t instruction = ArithmeticStations[rs_idx].instruction;
@@ -96,7 +100,9 @@ class Processor {
         
                        // send to execution unit (will be processed in execute stage)
                        // store which reservation station this came from for writeback
-                       ArithmeticUnit.issueInstruction(instruction, rs_val, rt_val, rs_idx);
+
+                      // TODO: currently only issues to first
+                       MemUnits[0].issueInstruction(instruction, rs_val, rt_val, rs_idx);
                     }
                 }
 
@@ -152,7 +158,8 @@ class Processor {
                         bool arith = i < ARITHM_STATIONS;
                         int index = i < ARITHM_STATIONS ? i : i % ARITHM_STATIONS;
 
-                        ReservationStation &rs;
+                        //ReservationStation &rs;
+                        ReservationStation rs;
                         if (arith)
                             rs = ArithmeticStations[index];
                         else
