@@ -199,10 +199,6 @@ void Processor::rename(){
 
     // exit if there is no reorder buffer spot available
     // logic probably needs work
-<<<<<<< HEAD
-=======
-    
->>>>>>> 6dbbcf7 (broke something)
     if (nextState.check_reorderBuffer())
         return; 
 
@@ -372,7 +368,7 @@ void Processor::execute(){
         ExecutionUnit currentUnit = currentState.ArithUnits[j];
         if (!currentUnit.checkBusy())
             continue;
-+
+
         // execute the instruction
         currentUnit.execute();
 
@@ -465,11 +461,7 @@ void Processor::commit(){
 }
 
 void Processor::test_advance() {
-<<<<<<< HEAD
-    uint32_t instruction = 19546144; // add r8, r9, r10
-=======
     uint32_t instruction = 19546144; //add r8, r9, r10
->>>>>>> 6dbbcf7 (broke something)
     testFetch(instruction);
     rename();
     issue();

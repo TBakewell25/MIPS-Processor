@@ -190,19 +190,7 @@ class Processor {
                         }
                     }
                 }
-<<<<<<< HEAD
-                   
-=======
-
-                State() {
-                    for (int j < 0; j < MEMORY_STATIONS; ++j) 
-                        MemoryStations[j].in_use = false;
-                    for (int i < 0; i < ARITHM_STATIONS; ++i)
-                        ArithmeticStations[i].in_use = false;
-                }
-
->>>>>>> 6dbbcf7 (broke something)
-        };
+       };
    
         State currentState = State();
         State nextState = State();
