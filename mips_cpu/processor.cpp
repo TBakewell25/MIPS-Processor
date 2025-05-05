@@ -147,7 +147,7 @@ void Processor::fetch() {
     if (!instruction_read)
         return;
     else 
-       instruction_queue.push(instruction); 
+      nextState.instruction_queue.push(instruction); 
           
     // increment pc
     regfile.pc += 4;
@@ -166,9 +166,10 @@ void Processor::fetch() {
 
 void Processor::rename(){
     // 1. peek at instruction
-    uint32_t instruction = instruction_queue.front();
+    uint32_t instruction = currentState.instruction_queue.front();
 
     // 2. decode peeked value
+ //TODO: move control to state class
     control.decode(instruction);
 
     // extract rs, rt, rd
@@ -264,7 +265,7 @@ void Processor::rename(){
  
 
     // 7. Remove Instruction
-    instruction_queue.pop();
+    currentState.instruction_queue.pop();
 }
 
 /*
@@ -311,7 +312,7 @@ void Processor::issue(){
     }
 
     // 4. Dispatch to execution unit
-    currentState.issueToExecutionUnits(ready_arith_rs, ready_mem_rs);
+    nextState.issueToExecutionUnits(ready_arith_rs, ready_mem_rs);
    
 }
 
@@ -339,7 +340,7 @@ void Processor::execute(){
         int phys_dest = currentState.ArithmeticStations[source_station].phys_rd;
         nextState.CDB[free_cdb_entry] = CDBEntry(phys_dest, result);
 
-        currentState.physRegFile.completeROBEntry(phys_dest, result);
+        nextState.physRegFile.completeROBEntry(phys_dest, result);
     }
 
     for (int j = 0; j < 2; ++j) {
@@ -359,7 +360,7 @@ void Processor::execute(){
         int phys_dest = currentState.ArithmeticStations[source_station].phys_rd;
         nextState.CDB[free_cdb_entry] = CDBEntry(phys_dest, result);
 
-        currentState.physRegFile.completeROBEntry(phys_dest, result);
+        nextState.physRegFile.completeROBEntry(phys_dest, result);
 
 //        markROBEntryCompleted(phys_dest, result);
     }

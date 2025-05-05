@@ -56,6 +56,10 @@ class Processor {
 
         class State {
             public:
+
+                // an instruction queue to get instructions from fetch to rename stages  
+                std::queue<uint32_t>instruction_queue;
+
                 // Reservation Stations
                 ReservationStation ArithmeticStations[ARITHM_STATIONS];
                 ReservationStation MemoryStations[MEM_STATIONS];
@@ -194,9 +198,6 @@ class Processor {
         State currentState;
         State nextState;
 
-        // an instruction queue to get instructions from fetch to rename stages  
-        std::queue<uint32_t>instruction_queue;
- 
         // common data bus is just a vector for simplicity, might need to do more 
         std::vector<uint32_t> CommonDataBus;
 
