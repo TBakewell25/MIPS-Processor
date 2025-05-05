@@ -367,7 +367,7 @@ void Processor::execute(){
 
 void Processor::write_back(){
     // this basically does nothing right now, needs serious work
-    nextState.physRegFile.updateReadyToCommit();
+//    nextState.physRegFile.markReadyToCommit();
 }
 
 void Processor::commit(){
@@ -376,15 +376,39 @@ void Processor::commit(){
     
     while (commit_count < COMMIT_WIDTH) {
         // prep new ROB entry
-        PhysicalRegisterUnit::ROBEntry entry;
+        PhysicalRegisterUnit::ROBEntry head = nextState.physRegFile.peekHead();
 
-        // check empty
-        if (nexState.physRegFile.isEmpty())
+        if (!head.completed)
             break;
-        // will need to do special stuff for each opcode
-        int opcode = (entry.instruction >> 26) & 0x3f;
 
+        // we peeked, now we can actually fetch it
+        PhysicalRegisterUnit::ROBEntry entry = nextState.physRegFile.dequeue();        
+
+        // good ol' decode logic, nothing new
+        uint32_t instruction = entry.instruction;
+        int opcode = (instruction >> 26) & 0x3f;
+        int rs = (instruction >> 21) & 0x1f;
+        int rt = (instruction >> 16) & 0x1f;
+        int rd = (instruction >> 11) & 0x1f;
+        int funct = instruction & 0x3f;
+
+        int dest_reg = entry.dest_reg;
+    
+        if (dest_reg > 0) {
+            // write to arch reg
+            uint32_t dummy;
+            regfile.access(0, 0, dummy, dummy, dest_reg, true, entry.result);
+           
+            // free up phys reg in RAT and elsewhere as necessary 
+            if (entry.old_phys_reg != -1) 
+                nextState.physRegFile.freePhysReg(entry.old_phys_reg);
+        }
+
+        // TODO: NEED BRANCH AND LOAD/STORE
+        commit_count++;
+    }
 }
+            
 void Processor::ooo_advance() {
     fetch();
     rename();

@@ -14,7 +14,7 @@ class ReservationStation {
         uint32_t opcode;
 
         int phys_rt, phys_rs; // mappings for physical rt and rd
-        bool read_rt, ready_rs; // ready bits for above
+        bool ready_rt, ready_rs; // ready bits for above
         uint32_t rt_val, rs_val; // actual data goes here
 
         uint32_t phys_rd; // mapping for destination

@@ -91,6 +91,7 @@ class PhysicalRegisterUnit {
 
         bool checkFreePhys() { return freePhysRegs.empty(); }
         // constructor -- initializes values for starting execution
+/*
         PhysicalRegisterUnit(int reg_count) {
 
             head = tail = count = capacity = 0;
@@ -106,7 +107,7 @@ class PhysicalRegisterUnit {
             
         }
          
-        // Enqueue operation
+ */       // Enqueue operation
         // 0 on success, -1 on error
         int enqueue(ROBEntry value) {
             if (is_full) 
