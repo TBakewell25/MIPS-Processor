@@ -175,10 +175,8 @@ void Processor::fetch() {
 */
 
 void Processor::rename(){
-    if (cold_start > 9) {
-        cold_start--;
+    if (cold_start > 4)
         return;
-    }
 
     // new control for each cycle, I don't think signals need to persist
     control_t control;
@@ -262,6 +260,7 @@ void Processor::rename(){
     station->phys_rt = phys_rt;
     station->phys_rd = new_phys_reg;
 
+    station->ready_rs = (rs == 0) || nextState.physRegFile.checkReady(phys_rs);
     station->ready_rt = (rt == 0) || nextState.physRegFile.checkReady(phys_rt);
 
     // if ready set the values
@@ -315,10 +314,8 @@ void Processor::rename(){
 */
 
 void Processor::issue(){
-    if (cold_start > 4) {
-        cold_start--;
+    if (cold_start > 3)
         return;
-    }
 
     // 1. Monitor results (on CDB)
     for (int i = 0; i < EXEC_UNITS; ++i) {
@@ -364,13 +361,14 @@ void Processor::issue(){
 */
 
 void Processor::execute(){
-    if (cold_start > 1) {
-        cold_start--;
+    if (cold_start > 2)
         return;
-    }
 
     for (int j = 0; j < 4; ++j) {
         ExecutionUnit currentUnit = currentState.ArithUnits[j];
+        if (!currentUnit.checkBusy())
+            continue;
++
         // execute the instruction
         currentUnit.execute();
 
@@ -391,6 +389,9 @@ void Processor::execute(){
 
     for (int j = 0; j < 2; ++j) {
         ExecutionUnit currentUnit = currentState.MemUnits[j];
+        if (!currentUnit.checkBusy())
+            continue;
+
         // execute the instruction
         currentUnit.execute();
 
@@ -418,10 +419,8 @@ void Processor::write_back(){
 }
 
 void Processor::commit(){
-    if (cold_start >= 0) {
-        cold_start--;
+    if (cold_start > 1)
         return;
-    }
 
     // bookeeping for committing
     int commit_count = 0; 
@@ -471,6 +470,7 @@ void Processor::test_advance() {
     commit();
 
     currentState = nextState;
+    cold_start--;
 }           
 void Processor::ooo_advance() {
     fetch();
@@ -481,4 +481,5 @@ void Processor::ooo_advance() {
     commit();
 
     currentState = nextState;
+    cold_start--;
 }
