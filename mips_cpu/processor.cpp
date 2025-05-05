@@ -47,9 +47,15 @@ void Processor::advance() {
 }
 
 void Processor::single_cycle_processor_advance() {
+    // Advance cache refill timers before starting this cycle’s memory operations
+    memory->tick();
+
     // fetch
     uint32_t instruction;
-    memory->access(regfile.pc, instruction, 0, 1, 0);
+    if (!memory->access(regfile.pc, instruction, 0, /*mem_read=*/1, /*mem_write=*/0)) {
+        // Miss pending: stall this cycle
+        return;
+    }
     //DEBUG(cout << "\nPC: 0x" << std::hex << regfile.pc << std::dec << "\n");
     // increment pc
     regfile.pc += 4;
@@ -95,13 +101,21 @@ void Processor::single_cycle_processor_advance() {
     uint32_t write_data_mem = 0;
 
     // Memory
-    // First read no matter whether it is a load or a store
-    memory->access(alu_result, read_data_mem, 0, control.mem_read | control.mem_write, 0);
+    // First read (for loads); stall on miss
+    if (control.mem_read) {
+        if (!memory->access(alu_result, read_data_mem, 0, /*mem_read=*/1, /*mem_write=*/0)) {
+            return;
+        }
+    }
     // Stores: sb or sh mask and preserve original leftmost bits
     write_data_mem = control.halfword ? (read_data_mem & 0xffff0000) | (read_data_2 & 0xffff) : 
                     control.byte ? (read_data_mem & 0xffffff00) | (read_data_2 & 0xff): read_data_2;
-    // Write to memory only if mem_write is 1, i.e store
-    memory->access(alu_result, read_data_mem, write_data_mem, control.mem_read, control.mem_write);
+    // Write to memory only if mem_write is 1
+    if (control.mem_write) {
+        if (!memory->access(alu_result, read_data_mem, write_data_mem, /*mem_read=*/0, /*mem_write=*/1)) {
+            return;
+        }
+    }
     // Loads: lbu or lhu modify read data by masking
     read_data_mem &= control.halfword ? 0xffff : control.byte ? 0xff : 0xffffffff;
 
@@ -115,6 +129,9 @@ void Processor::single_cycle_processor_advance() {
     // Update PC
     regfile.pc += (control.branch && !control.bne && alu_zero) || (control.bne && !alu_zero) ? imm << 2 : 0; 
     regfile.pc = control.jump_reg ? read_data_1 : control.jump ? (regfile.pc & 0xf0000000) & (addr << 2): regfile.pc;
+
+    // Advance cache refill timers after all stages
+    memory->tick();
 }
 
 // check for arithmetic or mem to dispatch to RS
@@ -275,6 +292,9 @@ void Processor::ooo_advance() {
     execute();
     write_back();
     commit();
+
+    // After OOO pipeline stages, advance cache refill timers
+    memory->tick();
 
     currentState = nextState;
 }

@@ -1,9 +1,18 @@
 #ifndef MEMORY
 #define MEMORY
 #include <vector>
+#include <queue>
 #include <cstdint>
 #include <iostream>
+#include <string>
 #include <cmath>
+
+struct MSHREntry {
+    uint64_t blockAddr;               // block-aligned address
+    bool     valid        = false;    // entry in use?
+    bool     isLoad = false;          // load vs store (default false)
+    std::vector<uint32_t> waitingInstrIds; // instructions waiting on this block
+};
 
 #define CACHE_LINE_SIZE 64
 
@@ -95,14 +104,121 @@ class Cache {
         }
 };
 
+class NonBlockingCache {
+public:
+    // Constructor: initialize members in declaration order 
+    NonBlockingCache(size_t numSets,
+                     size_t assoc,
+                     size_t mshrEntries,
+                     unsigned refillLatency)
+      : cache("", numSets * assoc * CACHE_LINE_SIZE, assoc, refillLatency),
+        sets(numSets),
+        assoc(assoc),
+        mshrCount(mshrEntries),
+        latency(refillLatency),
+        mshr(mshrEntries) {}
+
+    // Access the cache: true+data on hit; false on miss
+    bool access(uint32_t address,
+                bool isLoad,
+                uint32_t instrId,
+                uint32_t &outData) {
+        uint64_t blockAddr = address / CACHE_LINE_SIZE;
+        uint32_t loc;
+        if (cache.isHit(address, loc)) {
+            CacheLine line = cache.readLine(address);
+            uint32_t offset = cache.getOffset(address);
+            outData = line.data[offset / 4];
+            cache.updateReplacementBits(cache.getIndex(address), loc % assoc);
+            return true;
+        }
+        int idx = findMSHR(blockAddr);
+        if (idx >= 0) {
+            mshr[idx].waitingInstrIds.push_back(instrId);
+            return false;
+        }
+        idx = allocMSHR(blockAddr, isLoad, instrId);
+        if (idx < 0) {
+            return false;
+        }
+        refillQ.push({blockAddr, static_cast<int>(latency)});
+        return false;
+    }
+
+    // Advance outstanding misses each cycle
+    void tick() {
+        if (refillQ.empty()) return;
+        auto &req = refillQ.front();
+        if (--req.second == 0) {
+            uint64_t blockAddr = req.first;
+            refillQ.pop();
+            uint32_t address = blockAddr * CACHE_LINE_SIZE;
+            // Install line into cache (evict if needed)
+            CacheLine newLine;
+            // TODO: copy data bytes from main memory 'mem' into newLine.data[]
+            //       e.g. for each word i in 0..CACHE_LINE_SIZE/4: newLine.data[i] = mem[(address/4)+i];
+            newLine.address = address;
+            newLine.tag = cache.getTag(address);
+            newLine.valid = true;
+            newLine.dirty = false;
+            // Install new line, capturing any evicted line
+            CacheLine evicted;
+            // Evicted line goes into 'evicted' so we don't overwrite our newLine buffer
+            cache.replace(address, newLine, evicted);
+            int idx = findMSHR(blockAddr);
+            if (idx >= 0) {
+                for (auto instId : mshr[idx].waitingInstrIds) {
+                    // TODO: once fill completes, enqueue 'instId' into the processor's replay/ready queue
+                }
+                mshr[idx].valid = false;
+                mshr[idx].waitingInstrIds.clear();
+            }
+        }
+    }
+
+private:
+    // Find existing MSHR entry or -1
+    int findMSHR(uint64_t blockAddr) {
+        for (int i = 0; i < (int)mshrCount; ++i) {
+            if (mshr[i].valid && mshr[i].blockAddr == blockAddr)
+                return i;
+        }
+        return -1;
+    }
+
+    // Allocate a free MSHR entry or -1
+    int allocMSHR(uint64_t blockAddr,
+                  bool isLoad,
+                  uint32_t instrId) {
+        for (int i = 0; i < (int)mshrCount; ++i) {
+            if (!mshr[i].valid) {
+                mshr[i].valid = true;
+                mshr[i].blockAddr = blockAddr;
+                mshr[i].isLoad = isLoad;
+                mshr[i].waitingInstrIds.clear();
+                mshr[i].waitingInstrIds.push_back(instrId);
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    Cache cache;  // underlying blocking cache for tag/data arrays
+    size_t sets, assoc, mshrCount, latency;
+    std::vector<MSHREntry> mshr;
+    std::queue<std::pair<uint64_t,int>> refillQ;
+};
+
 class Memory {
     private:
         std::vector<uint32_t> mem;
-        Cache L1 = Cache("L1", 32768, 8, 12);
-        Cache L2 = Cache("L2", 262144, 8, 59);
+        NonBlockingCache L1;
+        NonBlockingCache L2;
         int opt_level;
     public:
-        Memory() {
+        Memory()
+          : L1( 32768 / CACHE_LINE_SIZE / 8, 8, 16, 12),
+            L2( 262144 / CACHE_LINE_SIZE / 8, 8, 32, 59) {
             mem.resize(2097152, 0);
             opt_level = 0;
         }

@@ -193,3 +193,107 @@ bool Memory::access(uint32_t address, uint32_t &read_data, uint32_t write_data, 
     }
     return false;
 }
+
+// --- NonBlockingCache Method Implementations ---
+
+// Constructor: initialize members in declaration order (cache → sets → assoc → mshrCount → latency → mshr)
+NonBlockingCache::NonBlockingCache(size_t numSets,
+                                   size_t assoc,
+                                   size_t mshrEntries,
+                                   unsigned refillLatency)
+  : cache("", numSets * assoc * CACHE_LINE_SIZE, assoc, refillLatency),
+    sets(numSets),
+    assoc(assoc),
+    mshrCount(mshrEntries),
+    latency(refillLatency),
+    mshr(mshrEntries) {}
+
+// Search for an existing MSHR entry to support miss coalescing
+int NonBlockingCache::findMSHR(uint64_t blockAddr) {
+    for (int i = 0; i < (int)mshrCount; ++i) {
+        if (mshr[i].valid && mshr[i].blockAddr == blockAddr)
+            return i;
+    }
+    return -1;
+}
+
+// Allocate a free MSHR entry; return -1 if none available (structural stall)
+int NonBlockingCache::allocMSHR(uint64_t blockAddr,
+                                bool isLoad,
+                                uint32_t instrId) {
+    for (int i = 0; i < (int)mshrCount; ++i) {
+        if (!mshr[i].valid) {
+            mshr[i].valid = true;
+            mshr[i].blockAddr = blockAddr;
+            mshr[i].isLoad = isLoad;
+            mshr[i].waitingInstrIds.clear();
+            mshr[i].waitingInstrIds.push_back(instrId);
+            return i;
+        }
+    }
+    return -1;
+}
+
+// Access the cache: true+data on hit; false on miss (enqueues MSHR/refill)
+bool NonBlockingCache::access(uint32_t address,
+                              bool isLoad,
+                              uint32_t instrId,
+                              uint32_t &outData) {
+    // Compute block-aligned address for MSHR indexing
+    uint64_t blockAddr = address / CACHE_LINE_SIZE;
+    uint32_t loc;
+    // Hit path: return data immediately from underlying cache
+    if (cache.isHit(address, loc)) {
+        CacheLine line = cache.readLine(address);
+        uint32_t offset = cache.getOffset(address);
+        outData = line.data[offset / 4];
+        cache.updateReplacementBits(cache.getIndex(address), loc % assoc);
+        return true;
+    }
+    // Miss: check if this block is already being fetched (coalesce miss)
+    int idx = findMSHR(blockAddr);
+    if (idx >= 0) {
+        mshr[idx].waitingInstrIds.push_back(instrId);
+        return false;
+    }
+    // Allocate a new MSHR entry for this miss if possible
+    idx = allocMSHR(blockAddr, isLoad, instrId);
+    if (idx < 0) {
+        // Structural stall: MSHR table full
+        return false;
+    }
+    // Schedule cache-line refill after specified latency
+    refillQ.push({blockAddr, static_cast<int>(latency)});
+    return false;
+}
+
+// Each cycle: process the next pending refill request if any
+void NonBlockingCache::tick() {
+    if (refillQ.empty()) return;
+    auto &req = refillQ.front();
+    // Decrement remaining cycles until this refill completes
+    if (--req.second == 0) {
+        // Refill complete: install line into cache and wake waiting instructions
+        uint64_t blockAddr = req.first;
+        refillQ.pop();
+        uint32_t address = blockAddr * CACHE_LINE_SIZE;
+        // Install the filled line into cache (evict if needed)
+        CacheLine newLine;
+        // TODO: copy data bytes from main memory 'mem' into newLine.data[]
+        newLine.address = address;
+        newLine.tag = cache.getTag(address);
+        newLine.valid = true;
+        newLine.dirty = false;
+        // Evicted line goes into 'evicted' so we don't overwrite our newLine buffer
+        CacheLine evicted;
+        cache.replace(address, newLine, evicted);
+        int idx = findMSHR(blockAddr);
+        if (idx >= 0) {
+            for (auto instId : mshr[idx].waitingInstrIds) {
+                // TODO: once fill completes, enqueue 'instId' into the processor's replay/ready queue
+            }
+            mshr[idx].valid = false;
+            mshr[idx].waitingInstrIds.clear();
+        }
+    }
+}
