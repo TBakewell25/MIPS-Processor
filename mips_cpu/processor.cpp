@@ -14,6 +14,7 @@ using namespace std;
 #define EXEC_UNITS 6      
 #define ARITHM_STATIONS 4
 #define MEM_STATIONS 2 
+#define COMMIT_WIDTH 2
 
 void Processor::initialize(int level) {
     // Initialize Control
@@ -338,8 +339,7 @@ void Processor::execute(){
         int phys_dest = currentState.ArithmeticStations[source_station].phys_rd;
         nextState.CDB[free_cdb_entry] = CDBEntry(phys_dest, result);
 
-        // IMPLEMENT ME
-//       markROBEntryCompleted(phys_dest, result);
+        currentState.physRegFile.completeROBEntry(phys_dest, result);
     }
 
     for (int j = 0; j < 2; ++j) {
@@ -359,7 +359,8 @@ void Processor::execute(){
         int phys_dest = currentState.ArithmeticStations[source_station].phys_rd;
         nextState.CDB[free_cdb_entry] = CDBEntry(phys_dest, result);
 
-        // IMPLEMENT ME
+        currentState.physRegFile.completeROBEntry(phys_dest, result);
+
 //        markROBEntryCompleted(phys_dest, result);
     }
 }
@@ -369,8 +370,21 @@ void Processor::write_back(){
     nextState.physRegFile.updateReadyToCommit();
 }
 
-void Processor::commit(){}
- 
+void Processor::commit(){
+    // bookeeping for committing
+    int commit_count = 0; 
+    
+    while (commit_count < COMMIT_WIDTH) {
+        // prep new ROB entry
+        PhysicalRegisterUnit::ROBEntry entry;
+
+        // check empty
+        if (nexState.physRegFile.isEmpty())
+            break;
+        // will need to do special stuff for each opcode
+        int opcode = (entry.instruction >> 26) & 0x3f;
+
+}
 void Processor::ooo_advance() {
     fetch();
     rename();

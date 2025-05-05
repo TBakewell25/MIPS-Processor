@@ -240,6 +240,47 @@ class PhysicalRegisterUnit {
             
             return true;
         }
+
+        // Peek at head without removing it
+        ROBEntry peekHead() {
+            if (isEmpty()) {
+            // Return an empty/invalid entry
+                ROBEntry empty;
+                empty.dest_reg = -1;
+                empty.phys_reg = -1;
+                empty.old_phys_reg = -1;
+                empty.completed = false;
+                empty.ready_to_commit = false;
+                return empty;
+            }
+            return reorderBuffer[head];
+        }
+
+        // Mark a ROB entry as ready to commit
+        void markReadyToCommit(int phys_reg) {
+            for (int i = 0; i < capacity; i++) {
+                int idx = (head + i) % capacity;
+                if (reorderBuffer[idx].phys_reg == phys_reg && reorderBuffer[idx].completed) {
+                    reorderBuffer[idx].ready_to_commit = true;
+                    return;
+                }
+            }
+        }
+
+        // Update the capacity in constructor
+        PhysicalRegisterUnit(int reg_count) {
+            capacity = 32; // Or whatever size you want for ROB
+            head = tail = count = 0;
+            is_full = false;
+    
+            reorderBuffer.resize(capacity);
+    
+            for (int i = ARCH_REG; i < reg_count; i++) 
+                freePhysRegs.push_back(i);
+    
+            for (int i = 0; i < reg_count; i++)
+                regReady[i] = (i < ARCH_REG);
+        }
         
         // handle branch misprediction or exception recovery
         void recover(int rob_entry_index) {
