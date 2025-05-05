@@ -205,6 +205,7 @@ class Processor {
         //void pipelined_processor_advance();
         void ooo_advance();
 
+        void test_advance();
         /* OOO stages
         *  Fetch - fetch instructions into reorder
         *  Rename - register renaming through RAT
@@ -213,6 +214,7 @@ class Processor {
         *  write_back - push to the CBD to broadcast
         *  commit - commit completed, pipelined one
         */
+        void testFetch();
         void fetch();
         void rename();
         void issue();

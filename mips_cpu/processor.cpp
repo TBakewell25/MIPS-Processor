@@ -43,6 +43,8 @@ void Processor::advance() {
     switch (opt_level) {
         case 0: single_cycle_processor_advance();
                 break;
+        case 1: test_advance();
+                break;
         case 2: ooo_advance();
                 break;
         default: break;
@@ -135,7 +137,15 @@ int checkInstructionType(uint32_t instruction) {
     return 0;
 }
     
-    
+
+void Processor::testFetch(uint32_t instruction) {
+    nextState.instruction_queue.push(instruction); 
+          
+    // increment pc
+    regfile.pc += 4;
+}
+
+   
 
 void Processor::fetch() {
     uint32_t instruction;
@@ -165,6 +175,9 @@ void Processor::fetch() {
 */
 
 void Processor::rename(){
+    // new control for each cycle, I don't think signals need to persist
+    control_t control;
+
     // 1. peek at instruction
     uint32_t instruction = currentState.instruction_queue.front();
 
@@ -409,7 +422,18 @@ void Processor::commit(){
         commit_count++;
     }
 }
-            
+
+void Processor::test_advance() {
+    uint32_t instruction = 19464224; // add r8, r9, r10
+    testFetch(instruction);
+    rename();
+    issue();
+    execute();
+    write_back();
+    commit();
+
+    currentState = nextState;
+}           
 void Processor::ooo_advance() {
     fetch();
     rename();
