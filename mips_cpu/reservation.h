@@ -31,7 +31,7 @@ class ReservationStation {
 
 
         ReservationStation() {
-            in_use= false;
+            in_use = false;
             executing = false;
         };
 

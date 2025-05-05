@@ -148,6 +148,7 @@ class Processor {
                         if (!ArithmeticStations[i].checkStation()) {
                             ArithmeticStations[i].setInstruction(instruction);
                             ArithmeticStations[i].setInUse();
+                            break; // might need another break
                         }
                     }
                 }
@@ -169,11 +170,7 @@ class Processor {
                         int index = i < ARITHM_STATIONS ? i : i % ARITHM_STATIONS;
 
                         //ReservationStation &rs;
-                        ReservationStation rs;
-                        if (arith)
-                            rs = ArithmeticStations[index];
-                        else
-                            rs = MemoryStations[index];
+                        ReservationStation &rs = arith ? ArithmeticStations[index] : MemoryStations[index];
 
                         if (rs.checkStation()) {
                             // update source if waiting on this tag
@@ -192,7 +189,7 @@ class Processor {
                         }
                     }
                 }
-
+                   
         };
    
         State currentState;
@@ -214,7 +211,7 @@ class Processor {
         *  write_back - push to the CBD to broadcast
         *  commit - commit completed, pipelined one
         */
-        void testFetch();
+        void testFetch(uint32_t instruction);
         void fetch();
         void rename();
         void issue();
@@ -255,7 +252,6 @@ class Processor {
          }    
 
          //STUBS
-
          void push_to_rs() { return; }
- 
+         int cold_start = 5;
 };

@@ -84,6 +84,8 @@ class PhysicalRegisterUnit {
 
     public:
 
+        bool checkReady(int phys_reg) { return regReady[phys_reg]; }
+
         // Register Alias Table implementation
         RAT RAT_Unit;
 

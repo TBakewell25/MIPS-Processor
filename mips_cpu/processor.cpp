@@ -175,6 +175,11 @@ void Processor::fetch() {
 */
 
 void Processor::rename(){
+    if (cold_start > 9) {
+        cold_start--;
+        return;
+    }
+
     // new control for each cycle, I don't think signals need to persist
     control_t control;
 
@@ -196,11 +201,11 @@ void Processor::rename(){
 
     // exit if there is no reorder buffer spot available
     // logic probably needs work
-    if (!nextState.check_reorderBuffer())
+    if (nextState.check_reorderBuffer())
         return; 
 
     // check for availability of physical registers
-    if (control.reg_write && !nextState.physRegFile.checkFreePhys())
+    if (control.reg_write && nextState.physRegFile.checkFreePhys())
         return;
 
     // 0 arithmetic, 1 memory operation
@@ -246,6 +251,26 @@ void Processor::rename(){
     int phys_rs = rs != 0 ? nextState.physRegFile.getMapping(rs) : 0;
     int phys_rt = rt != 0 ? nextState.physRegFile.getMapping(rt) : 0;
 
+    ReservationStation *station = nullptr;
+    if (instr_type == 0)
+        station = &nextState.ArithmeticStations[available_station_a];
+    else 
+        station = &nextState.MemoryStations[available_station_m];
+
+    // set up the reservation station
+    station->phys_rs = phys_rs;
+    station->phys_rt = phys_rt;
+    station->phys_rd = new_phys_reg;
+
+    station->ready_rt = (rt == 0) || nextState.physRegFile.checkReady(phys_rt);
+
+    // if ready set the values
+    if (station->ready_rs) 
+        station->rs_val = (rs == 0) ? 0 : nextState.physRegFile.getValue(phys_rs);
+    
+    if (station->ready_rt)
+        station->rt_val = (rt == 0) ? 0 : nextState.physRegFile.getValue(phys_rt);
+    
     // map the arch write_reg to the allocated "new_phys_reg"
     if (control.reg_write && write_reg != 0)
         nextState.physRegFile.RAT_Unit.updateMapping(write_reg, new_phys_reg);
@@ -290,6 +315,10 @@ void Processor::rename(){
 */
 
 void Processor::issue(){
+    if (cold_start > 4) {
+        cold_start--;
+        return;
+    }
 
     // 1. Monitor results (on CDB)
     for (int i = 0; i < EXEC_UNITS; ++i) {
@@ -326,7 +355,6 @@ void Processor::issue(){
 
     // 4. Dispatch to execution unit
     nextState.issueToExecutionUnits(ready_arith_rs, ready_mem_rs);
-   
 }
 
 /*
@@ -336,6 +364,11 @@ void Processor::issue(){
 */
 
 void Processor::execute(){
+    if (cold_start > 1) {
+        cold_start--;
+        return;
+    }
+
     for (int j = 0; j < 4; ++j) {
         ExecutionUnit currentUnit = currentState.ArithUnits[j];
         // execute the instruction
@@ -385,6 +418,11 @@ void Processor::write_back(){
 }
 
 void Processor::commit(){
+    if (cold_start >= 0) {
+        cold_start--;
+        return;
+    }
+
     // bookeeping for committing
     int commit_count = 0; 
     
@@ -424,7 +462,7 @@ void Processor::commit(){
 }
 
 void Processor::test_advance() {
-    uint32_t instruction = 19464224; // add r8, r9, r10
+    uint32_t instruction = 19546144; // add r8, r9, r10
     testFetch(instruction);
     rename();
     issue();
