@@ -80,6 +80,7 @@ class Processor {
                        if (!CDB[i].valid) return i;
                     return -1;
                 }
+
                 void issueToExecutionUnits(std::vector<int>& ready_arith_rs, std::vector<int>& ready_mem_rs) {
                     // issue to arithmetic unit
                     if (!ready_arith_rs.empty()) {
@@ -189,11 +190,22 @@ class Processor {
                         }
                     }
                 }
+<<<<<<< HEAD
                    
+=======
+
+                State() {
+                    for (int j < 0; j < MEMORY_STATIONS; ++j) 
+                        MemoryStations[j].in_use = false;
+                    for (int i < 0; i < ARITHM_STATIONS; ++i)
+                        ArithmeticStations[i].in_use = false;
+                }
+
+>>>>>>> 6dbbcf7 (broke something)
         };
    
-        State currentState;
-        State nextState;
+        State currentState = State();
+        State nextState = State();
 
         // common data bus is just a vector for simplicity, might need to do more 
         std::vector<uint32_t> CommonDataBus;
