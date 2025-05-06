@@ -93,7 +93,6 @@ class PhysicalRegisterUnit {
         int getMapping(uint32_t arch_reg) { return RAT_Unit.getLiveMapping(arch_reg); }
 
         bool checkFreePhys() { return freePhysRegs.empty(); }
-         
         // Enqueue operation
         // 0 on success, -1 on error
         int enqueue(ROBEntry value) {
@@ -168,6 +167,12 @@ class PhysicalRegisterUnit {
         uint32_t getValue(int reg) {
             return physTable[reg];
         }
+
+        // write to the physical register
+        void writeRegister(int phys_reg, uint32_t val) {
+            physTable[phys_reg] = val;
+            regReady[phys_reg] = true;
+        }
         
         // get number of free physical registers
         int freeRegistersCount() {
@@ -176,7 +181,7 @@ class PhysicalRegisterUnit {
         
         // mark a ROB entry as completed with result
         void completeROBEntry(int rob_index, uint32_t result) {
-            if (rob_index < 0 || rob_index >= reorderBuffer.size())
+            if (rob_index < 0 || rob_index >= (int) reorderBuffer.size())
                 return;
                 
             reorderBuffer[rob_index].completed = true;
@@ -246,10 +251,33 @@ class PhysicalRegisterUnit {
                 empty.phys_reg = -1;
                 empty.old_phys_reg = -1;
                 empty.completed = false;
+                empty.ready_to_commit = false;
                 return empty;
             }
             return reorderBuffer[head];
         }
+
+        // Mark a ROB entry as ready to commit
+        void markReadyToCommit(int phys_reg) {
+            for (int i = 0; i < capacity; i++) {
+                int idx = (head + i) % capacity;
+                if (reorderBuffer[idx].phys_reg == phys_reg && reorderBuffer[idx].completed) {
+                    reorderBuffer[idx].ready_to_commit = true;
+                    return;
+                }
+            }
+        }
+
+        // Update the capacity in constructor
+        PhysicalRegisterUnit(int reg_count) {
+            capacity = 32; // Or whatever size you want for ROB
+            head = tail = count = 0;
+            is_full = false;
+    
+            reorderBuffer.resize(capacity);
+    
+            for (int i = ARCH_REG; i < reg_count; i++) 
+                freePhysRegs.push_back(i);
 
         // Update the capacity in constructor
         PhysicalRegisterUnit(int reg_count) {
