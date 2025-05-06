@@ -90,6 +90,8 @@ class Processor {
 
 
                         uint32_t instruction = ArithmeticStations[selected_station].instruction;
+
+                        // NOT PROPERLY POPULATED
                         uint32_t rs_val = ArithmeticStations[selected_station].rs_val;
                         uint32_t rt_val = ArithmeticStations[selected_station].rt_val;
         
@@ -159,6 +161,7 @@ class Processor {
                         if (!MemoryStations[i].checkStation()) {
                             MemoryStations[i].setInstruction(instruction);
                             MemoryStations[i].setInUse();
+                            break;
                         }
                     }
                 }
@@ -252,6 +255,7 @@ class Processor {
          }    
 
          //STUBS
-         void push_to_rs() { return; }
+         //void push_to_rs() { return; }
          int cold_start = 5;
+         bool stall = false;
 };

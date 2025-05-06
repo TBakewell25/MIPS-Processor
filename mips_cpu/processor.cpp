@@ -154,10 +154,13 @@ void Processor::fetch() {
     // fetch instructions from the cache, exit and try again next cycle on miss
     // send to instruction queue otherwise
     instruction_read = memory->access(regfile.pc, instruction, 0, 1, 0);
-    if (!instruction_read)
+    if (!instruction_read) {
+        stall = true;
         return;
-    else 
-      nextState.instruction_queue.push(instruction); 
+    } else {
+        nextState.instruction_queue.push(instruction); 
+        stall = false;
+    }
           
     // increment pc
     regfile.pc += 4;
@@ -193,7 +196,7 @@ void Processor::rename(){
     int rt = (instruction >> 16) & 0x1f;
     int rd = (instruction >> 11) & 0x1f;
 
-    int write_reg = control.reg_write ? rd : rt;
+    int write_reg = control.reg_dest ? rd : rt;
 
     // 3. check resources
 
@@ -201,7 +204,7 @@ void Processor::rename(){
     // logic probably needs work
     if (nextState.check_reorderBuffer())
         return; 
-
+// need to preserve IQ 
     // check for availability of physical registers
     if (control.reg_write && nextState.physRegFile.checkFreePhys())
         return;
@@ -474,11 +477,14 @@ void Processor::test_advance() {
 }           
 void Processor::ooo_advance() {
     fetch();
-    rename();
-    issue();
-    execute();
-    write_back();
-    commit();
+
+    if (!stall) {
+        rename();
+        issue();
+        execute();
+        write_back();
+        commit();
+    }
 
     currentState = nextState;
     cold_start--;
