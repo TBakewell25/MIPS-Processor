@@ -338,7 +338,7 @@ void Processor::issue(){
         if (currentState.CDB[i].valid) {
             // wake up whatever station is waiting
             currentState.wakeUpRS(currentState.CDB[i].phys_reg, currentState.CDB[i].value);
-            currentState.CDB[i].valid = false;
+            //currentState.CDB[i].valid = false; TODO: note, check back here
          }
     }
 
