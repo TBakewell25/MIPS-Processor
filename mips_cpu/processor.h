@@ -5,6 +5,7 @@
 #include "control.h"
 #include "reservation.h"
 #include "physical_reg.h"
+#include "execution_unit.h"
 
 #ifdef enable_debug
 #define debug(x) x
@@ -38,21 +39,81 @@ class Processor {
         *    -functional units
         */
 
+        struct CDBEntry {
+            bool valid;
+            int phys_reg; // physical reg being written to, check for dependencies
+            uint32_t value;
+            uint32_t result;
+
+            // invalid entry constructor
+            CDBEntry() : valid(false), phys_reg(0), value(0) {}
+    
+            // valid entry constructor
+            CDBEntry(int reg, uint32_t val) : 
+                valid(true), phys_reg(reg), value(val)  {}
+        };
+
+
         class State {
-            // Reservation Stations
-            ReservationStation ArithmeticStations[ARITHM_STATIONS];
-            ReservationStation MemoryStations[MEM_STATIONS];
-    
-    
-            // Free list for physical registers
-//            std::queue<int> freePhysRegs;
-
-            // Common Data Bus signals
-            bool CDB_valid;
-            int CDB_phys_reg;
-            uint32_t CDB_value;
-
             public:
+                // Reservation Stations
+                ReservationStation ArithmeticStations[ARITHM_STATIONS];
+                ReservationStation MemoryStations[MEM_STATIONS];
+
+                ExecutionUnit ArithUnits[4];
+                ExecutionUnit MemUnits[2];
+
+                CDBEntry CDB[MEM_STATIONS + ARITHM_STATIONS];
+    
+                /* Common Data Bus signals
+                bool CDB_valid;
+                int CDB_phys_reg;
+                uint32_t CDB_value; */
+
+                int findOpenCDB() {
+                    for (int i = 0; i < MEM_STATIONS + ARITHM_STATIONS; ++i)
+                       // potential logic issues
+                       if (!CDB[i].valid) return i;
+                    return -1;
+                }
+                void issueToExecutionUnits(std::vector<int>& ready_arith_rs, std::vector<int>& ready_mem_rs) {
+                    // issue to arithmetic unit
+                    if (!ready_arith_rs.empty()) {
+                        // select first available station
+                        int selected_station = ready_arith_rs[0];
+                        ArithmeticStations[selected_station].executing = true;
+
+
+                        uint32_t instruction = ArithmeticStations[selected_station].instruction;
+                        uint32_t rs_val = ArithmeticStations[selected_station].rs_val;
+                        uint32_t rt_val = ArithmeticStations[selected_station].rt_val;
+        
+                       // send to execution unit (will be processed in execute stage)
+                       // store which reservation station this came from for writeback
+                       // TODO: currently only issues to first 
+                       ArithUnits[0].issueInstruction(instruction, rs_val, rt_val, selected_station);
+                          
+                    }
+                    // issue to memory station
+                    if (!ready_mem_rs.empty()) {
+                        int rs_idx = ready_arith_rs[0];
+                        ArithmeticStations[rs_idx].executing = true;
+
+
+                        uint32_t instruction = ArithmeticStations[rs_idx].instruction;
+                        uint32_t rs_val = ArithmeticStations[rs_idx].rs_val;
+                        uint32_t rt_val = ArithmeticStations[rs_idx].rt_val;
+        
+                       // send to execution unit (will be processed in execute stage)
+                       // store which reservation station this came from for writeback
+
+                      // TODO: currently only issues to first
+                       MemUnits[0].issueInstruction(instruction, rs_val, rt_val, rs_idx);
+                    }
+                }
+
+    
+
                 // create physical registers and reorder buffer
                 PhysicalRegisterUnit physRegFile = PhysicalRegisterUnit(REG_COUNT);       
 
@@ -92,6 +153,38 @@ class Processor {
                         if (!MemoryStations[i].checkStation()) {
                             MemoryStations[i].setInstruction(instruction);
                             MemoryStations[i].setInUse();
+                        }
+                    }
+                }
+               
+                // wakeup every station
+                void wakeUpRS(int phys_reg, uint32_t value) {
+                    int stations = MEM_STATIONS + ARITHM_STATIONS;
+                    for (int i = 0; i < stations; ++i) {
+                        bool arith = i < ARITHM_STATIONS;
+                        int index = i < ARITHM_STATIONS ? i : i % ARITHM_STATIONS;
+
+                        //ReservationStation &rs;
+                        ReservationStation rs;
+                        if (arith)
+                            rs = ArithmeticStations[index];
+                        else
+                            rs = MemoryStations[index];
+
+                        if (rs.checkStation()) {
+                            // update source if waiting on this tag
+
+                            // if the source isn't ready, and its the same as our physical register
+                            if (!rs.ready_rs && rs.phys_rs == phys_reg) {
+                                rs.ready_rs = true;
+                                rs.rs_val = value;
+                            }
+                 
+                            // if the rt isn't ready, and its the same as our physical
+                            if (!rs.ready_rt && rs.phys_rt == phys_reg) {
+                                rs.ready_rt = true;
+                                rs.rt_val = value;
+                            }
                         }
                     }
                 }

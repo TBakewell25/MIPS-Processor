@@ -9,7 +9,7 @@
 
 class ReservationStation {
 
-    private:
+    public:
         uint32_t instruction;
         uint32_t opcode;
 
@@ -29,7 +29,6 @@ class ReservationStation {
         bool in_use;
         bool executing;
 
-    public:
 
         ReservationStation() {
             in_use= false;

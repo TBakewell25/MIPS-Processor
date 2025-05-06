@@ -11,7 +11,9 @@ using namespace std;
 #define debug(x) 
 #endif
 
-       
+#define EXEC_UNITS 6      
+#define ARITHM_STATIONS 4
+#define MEM_STATIONS 2 
 
 void Processor::initialize(int level) {
     // Initialize Control
@@ -263,8 +265,105 @@ void Processor::rename(){
     // 7. Remove Instruction
     instruction_queue.pop();
 }
-void Processor::issue(){}
-void Processor::execute(){}
+
+/*
+*   Steps for issue stage:
+*       1. Monitor results
+*       2. Check stations
+*       3. Select instruction
+*       4. Dispatch to execution unit
+*/
+
+void Processor::issue(){
+
+    // 1. Monitor results (on CDB)
+    for (int i = 0; i < EXEC_UNITS; ++i) {
+        if (currentState.CDB[i].valid) {
+            // wake up whatever station is waiting
+            currentState.wakeUpRS(currentState.CDB[i].phys_reg, currentState.CDB[i].value);
+            currentState.CDB[i].valid = false;
+         }
+    }
+
+    // 2. Check stations
+    std::vector<int> ready_arith_rs;
+    std::vector<int> ready_mem_rs;
+
+    // populate all available arithm stations
+    for (int j = 0; j < ARITHM_STATIONS; ++j) {
+        if (currentState.ArithmeticStations[j].in_use && 
+            !currentState.ArithmeticStations[j].executing &&
+            currentState.ArithmeticStations[j].ready_rs && 
+            currentState.ArithmeticStations[j].ready_rt) {
+            ready_arith_rs.push_back(j);
+        }
+    }
+
+    // populate all available mem stations
+    for (int n = 0; n < MEM_STATIONS; ++n) {
+        if (currentState.MemoryStations[n].in_use && 
+            !currentState.MemoryStations[n].executing &&
+            currentState.MemoryStations[n].ready_rs && 
+            currentState.MemoryStations[n].ready_rt) {
+            ready_mem_rs.push_back(n);
+        }
+    }
+
+    // 4. Dispatch to execution unit
+    currentState.issueToExecutionUnits(ready_arith_rs, ready_mem_rs);
+   
+}
+
+/*
+*   Steps for execute stage:
+*       1. Check for available units
+*       2. Do execution on available units
+*/
+
+void Processor::execute(){
+    for (int j = 0; j < 4; ++j) {
+        ExecutionUnit currentUnit = currentState.ArithUnits[j];
+        // execute the instruction
+        currentUnit.execute();
+
+        // get the result and the original RS
+        uint32_t result = currentUnit.getResult();
+        int source_station = currentUnit.getSourceRS(); 
+
+        // queue of for writeback (make CDB entry)
+        // TODO: handle no open cdb entry
+        int free_cdb_entry = currentState.findOpenCDB();
+
+        // we need to transfer metadata from rs to new cdb entry to broadcast
+        int phys_dest = currentState.ArithmeticStations[source_station].phys_rd;
+        nextState.CDB[free_cdb_entry] = CDBEntry(phys_dest, result);
+
+        // IMPLEMENT ME
+//       markROBEntryCompleted(phys_dest, result);
+    }
+
+    for (int j = 0; j < 2; ++j) {
+        ExecutionUnit currentUnit = currentState.MemUnits[j];
+        // execute the instruction
+        currentUnit.execute();
+
+        // get the result and the original RS
+        uint32_t result = currentUnit.getResult();
+        int source_station = currentUnit.getSourceRS(); 
+
+        // queue of for writeback (make CDB entry)
+        // TODO: handle no open cdb entry
+        int free_cdb_entry = currentState.findOpenCDB();
+
+        // we need to transfer metadata from rs to new cdb entry to broadcast
+        int phys_dest = currentState.ArithmeticStations[source_station].phys_rd;
+        nextState.CDB[free_cdb_entry] = CDBEntry(phys_dest, result);
+
+        // IMPLEMENT ME
+//        markROBEntryCompleted(phys_dest, result);
+    }
+}
+
 void Processor::write_back(){}
 void Processor::commit(){}
  
