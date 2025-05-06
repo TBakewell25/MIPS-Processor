@@ -88,8 +88,8 @@ class Processor {
                         int selected_station = ready_arith_rs[0];
                         ArithmeticStations[selected_station].executing = true;
 
-                        for (int i = 0; i < 4) {
-                            if (!ArithUnits[i].in_use) {
+                        for (int i = 0; i < 4; ++i) {
+                            if (!ArithUnits[i].checkBusy()) {
                                 uint32_t instruction = ArithmeticStations[selected_station].instruction;
                                 uint32_t rs_val = ArithmeticStations[selected_station].rs_val;
                                 uint32_t rt_val = ArithmeticStations[selected_station].rt_val;
@@ -105,8 +105,8 @@ class Processor {
                         int rs_idx = ready_mem_rs[0];
                         MemoryStations[rs_idx].executing = true;
                         
-                        for (int i = 0; i < 4) {
-                            if (!MemUnits[i].in_use) {
+                        for (int i = 0; i < 4; ++i) {
+                            if (!MemUnits[i].checkBusy()) {
                                 uint32_t instruction = MemoryStations[rs_idx].instruction;
                                 uint32_t rs_val = MemoryStations[rs_idx].rs_val;
                                 uint32_t rt_val = MemoryStations[rs_idx].rt_val;

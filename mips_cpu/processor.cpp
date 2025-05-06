@@ -410,9 +410,14 @@ void Processor::execute(){
         // TODO: handle no open cdb entry
         int free_cdb_entry = currentState.findOpenCDB();
 
+        CDBEntry *newCDBEntry = &nextState.CDB[free_cdb_entry];
+
         // we need to transfer metadata from rs to new cdb entry to broadcast
         int phys_dest = currentState.ArithmeticStations[source_station].phys_rd;
-        nextState.CDB[free_cdb_entry] = CDBEntry(phys_dest, result);
+        newCDBEntry->valid = true;
+        newCDBEntry->phys_reg = phys_dest;
+        newCDBEntry->result = result;
+        //nextState.CDB[free_cdb_entry] = CDBEntry(phys_dest, result);
 
         nextState.physRegFile.completeROBEntry(phys_dest, result);
 
