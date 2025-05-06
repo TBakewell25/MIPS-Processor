@@ -58,8 +58,8 @@ class Processor {
             public:
 
                 // an instruction queue to get instructions from fetch to rename stages  
-                std::queue<uint32_t>instruction_queue;
-
+                //std::queue<uint32_t>instruction_queue;
+                uint32_t instruction_queue; // 1 instruction at a time for now
                 // Reservation Stations
                 ReservationStation ArithmeticStations[ARITHM_STATIONS];
                 ReservationStation MemoryStations[MEM_STATIONS];
@@ -98,12 +98,13 @@ class Processor {
                        // send to execution unit (will be processed in execute stage)
                        // store which reservation station this came from for writeback
                        // TODO: currently only issues to first 
-                       ArithUnits[0].issueInstruction(instruction, rs_val, rt_val, selected_station);
+
+                       ArithUnits[selected_station].issueInstruction(instruction, rs_val, rt_val, selected_station);
                           
                     }
                     // issue to memory station
                     if (!ready_mem_rs.empty()) {
-                        int rs_idx = ready_arith_rs[0];
+                        int rs_idx = ready_mem_rs[0];
                         ArithmeticStations[rs_idx].executing = true;
 
 
@@ -146,6 +147,7 @@ class Processor {
                     return -1;
                 }
 
+                // obsolete (?)
                 void pushToArith(uint32_t instruction) {
                     for (int i = 0; i < ARITHM_STATIONS; ++i) {
                         if (!ArithmeticStations[i].checkStation()) {

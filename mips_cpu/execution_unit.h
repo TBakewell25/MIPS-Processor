@@ -17,6 +17,20 @@ class ExecutionUnit {
     public:
         ExecutionUnit() : in_use(false) {}
 
+        // copy constructor for issue() 
+        ExecutionUnit(const ExecutionUnit& newUnit) {
+            in_use = newUnit.in_use; 
+
+            instruction = newUnit.instruction;
+            op1 = newUnit.op1;
+            op2 = newUnit.op2;
+            alu_zero = newUnit.alu_zero;
+            ALU_op = newUnit.ALU_op;
+            result = newUnit.result; 
+
+            src_rs = newUnit.src_rs;
+        } 
+
         bool checkBusy() { return in_use; }
 
         virtual void issueInstruction(uint32_t instr, uint32_t oper1, uint32_t oper2, int station_idx) {

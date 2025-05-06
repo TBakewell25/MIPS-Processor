@@ -1,6 +1,7 @@
 #include <queue>
 #include <cstdint>
 #include <iostream>
+#include <cstring>
 #include "processor.h"
 
 using namespace std;
@@ -139,7 +140,7 @@ int checkInstructionType(uint32_t instruction) {
     
 
 void Processor::testFetch(uint32_t instruction) {
-    nextState.instruction_queue.push(instruction); 
+    //nextState.instruction_queue.push(instruction); 
           
     // increment pc
     regfile.pc += 4;
@@ -158,7 +159,8 @@ void Processor::fetch() {
         stall = true;
         return;
     } else {
-        nextState.instruction_queue.push(instruction); 
+        nextState.instruction_queue = instruction;
+        //nextState.instruction_queue.push(instruction); 
         stall = false;
     }
           
@@ -186,8 +188,11 @@ void Processor::rename(){
     uint32_t instruction = 0;
 
     // 1. peek at instruction
-    if (currentState.instruction_queue.size())
-        instruction = currentState.instruction_queue.front();
+    //if (currentState.instruction_queue.size())
+     //   instruction = currentState.instruction_queue.front();
+    
+    if (currentState.instruction_queue)
+        instruction = currentState.instruction_queue;
     else
         return;
 
@@ -263,12 +268,14 @@ void Processor::rename(){
         station = &nextState.MemoryStations[available_station_m];
 
     // set up the reservation station
+    station->instruction = instruction;    
     station->phys_rs = phys_rs;
     station->phys_rt = phys_rt;
     station->phys_rd = new_phys_reg;
 
     station->ready_rs = (rs == 0) || nextState.physRegFile.checkReady(phys_rs);
     station->ready_rt = (rt == 0) || nextState.physRegFile.checkReady(phys_rt);
+    station->in_use = true;
 
     // if ready set the values
     if (station->ready_rs) 
@@ -293,7 +300,8 @@ void Processor::rename(){
                      old_phys_reg);// not implemented
 
     
-    // 6. Dispatch
+    // 6. Dispatch HANDLED ABOVE
+    /*
     switch(instr_type) {
         case 0:
             nextState.pushToArith(instruction);
@@ -304,13 +312,13 @@ void Processor::rename(){
         default:
             break;
     }
-
+*/
     nextState.pushToROB(toBeSent);  
  
 
     // 7. Remove Instruction
-    currentState.instruction_queue.pop();
-    std::swap(currentState.instruction_queue, nextState.instruction_queue);    
+    //currentState.instruction_queue.pop();
+    //std::swap(currentState.instruction_queue, nextState.instruction_queue);    
 }
 
 /*
@@ -358,8 +366,22 @@ void Processor::issue(){
         }
     }
 
+    if (!ready_arith_rs.size() && !ready_mem_rs.size())
+        return;
+
     // 4. Dispatch to execution unit
     nextState.issueToExecutionUnits(ready_arith_rs, ready_mem_rs);
+
+    // push stations to next cycle
+/*    for (int i= 0; i < EXEC_UNITS; ++i) {
+        if (i > 3) {
+            int k = i % 4;
+            nextState.MemUnits[k] = ExecutionUnit(currentState.MemUnits[k]); 
+        } else {
+            nextState.ArithUnits[i] = ExecutionUnit(currentState.ArithUnits[i]); 
+        }
+    }*/
+
 }
 
 /*
