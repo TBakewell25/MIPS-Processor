@@ -28,7 +28,6 @@ class PhysicalRegisterUnit {
             int phys_reg;        // Physical destination register
             int old_phys_reg;    // Previous mapping for recovery
             bool completed;      // Has the instruction completed execution?
-            bool ready_to_commit; // Is it ready to commit?
             uint32_t result;     // Result value
         };
 
@@ -77,12 +76,16 @@ class PhysicalRegisterUnit {
         std::vector<ROBEntry> reorderBuffer; // the instruction reorder buffer, a circular buffer implemented below
         
         ///values for circ buffer implementation
-        int head, tail, 
-            count, capacity;
+        int head, tail, capacity;
 
         bool is_full;
 
+        // Stores the most recently committed ROB entry for processor to query
+        ROBEntry lastCommittedEntry;
+
     public:
+
+        bool checkReady(int phys_reg) { return regReady[phys_reg]; }
 
         // Register Alias Table implementation
         RAT RAT_Unit;
@@ -90,21 +93,6 @@ class PhysicalRegisterUnit {
         int getMapping(uint32_t arch_reg) { return RAT_Unit.getLiveMapping(arch_reg); }
 
         bool checkFreePhys() { return freePhysRegs.empty(); }
-        // constructor -- initializes values for starting execution
-        PhysicalRegisterUnit(int reg_count) {
-
-            head = tail = count = capacity = 0;
-            is_full = false;
-            
-            reorderBuffer.resize(capacity);
-            
-            for (int i = ARCH_REG; i < reg_count; i++) 
-                freePhysRegs.push_back(i);
-            
-            for (int i = 0; i < reg_count; i++)
-                regReady[i] = (i < ARCH_REG); // should be all true
-            
-        }
          
         // Enqueue operation
         // 0 on success, -1 on error
@@ -219,12 +207,15 @@ class PhysicalRegisterUnit {
             return &RAT_Unit;
         }
         
-        // Commit the head instruction and update architectural state
+        // Commit the head ROB entry:
+        // - Processor should use the returned entry.result and entry.dest_reg
+        //   to update the architectural register file before calling this.
         bool commitHead() {
             if (isEmpty() || !reorderBuffer[head].completed)
                 return false;
                 
             ROBEntry entry = dequeue();
+            lastCommittedEntry = entry;
             
             // If this instruction writes to a register
             if (entry.dest_reg != -1 && entry.phys_reg != -1) {
@@ -240,32 +231,58 @@ class PhysicalRegisterUnit {
             
             return true;
         }
+
+        // After a successful commitHead(), retrieve the committed entry
+        const ROBEntry& getLastCommittedEntry() const {
+            return lastCommittedEntry;
+        }
+
+        // Peek at head without removing it
+        ROBEntry peekHead() {
+            if (isEmpty()) {
+            // Return an empty/invalid entry
+                ROBEntry empty;
+                empty.dest_reg = -1;
+                empty.phys_reg = -1;
+                empty.old_phys_reg = -1;
+                empty.completed = false;
+                return empty;
+            }
+            return reorderBuffer[head];
+        }
+
+        // Update the capacity in constructor
+        PhysicalRegisterUnit(int reg_count) {
+            capacity = reg_count - ARCH_REG;
+            head = 0;
+            tail = 0;
+            is_full = false;
+
+            reorderBuffer.resize(capacity);
+
+            for (int i = ARCH_REG; i < reg_count; i++) 
+                freePhysRegs.push_back(i);
+
+            for (int i = 0; i < reg_count; i++)
+                regReady[i] = (i < ARCH_REG);
+        }
         
-        // handle branch misprediction or exception recovery
         void recover(int rob_entry_index) {
-            // flush all entries after the specified one
-            // and restore the RAT mappings
-            
-            // this is a simplified implementation
-            // TODO: fix me
-            int idx = rob_entry_index;
+            // Flush all ROB entries younger than the mispredicted one
+            int idx = (rob_entry_index + 1) % capacity;
             while (idx != tail) {
-                ROBEntry& entry = reorderBuffer[idx];
-                
-                // Restore RAT mapping if needed
+                ROBEntry &entry = reorderBuffer[idx];
+                // Restore RAT to the old mapping for dest_reg
                 if (entry.dest_reg != -1 && entry.old_phys_reg != -1) {
                     RAT_Unit.updateMapping(entry.dest_reg, entry.old_phys_reg);
                 }
-                
-                // Free the allocated physical register
+                // Free the newly allocated physical register
                 if (entry.phys_reg != -1) {
                     freePhysReg(entry.phys_reg);
                 }
-                
                 idx = (idx + 1) % capacity;
             }
-            
-            // Reset tail to the recovery point
+            // Move tail back to just after the recovered entry
             tail = (rob_entry_index + 1) % capacity;
             is_full = false;
         }
