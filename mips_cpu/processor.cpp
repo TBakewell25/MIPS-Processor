@@ -183,9 +183,13 @@ void Processor::rename(){
 
     // new control for each cycle, I don't think signals need to persist
     control_t control;
+    uint32_t instruction = 0;
 
     // 1. peek at instruction
-    uint32_t instruction = currentState.instruction_queue.front();
+    if (currentState.instruction_queue.size())
+        instruction = currentState.instruction_queue.front();
+    else
+        return;
 
     // 2. decode peeked value
  //TODO: move control to state class
@@ -306,6 +310,7 @@ void Processor::rename(){
 
     // 7. Remove Instruction
     currentState.instruction_queue.pop();
+    std::swap(currentState.instruction_queue, nextState.instruction_queue);    
 }
 
 /*
