@@ -30,14 +30,30 @@ class ExecutionUnit {
         bool execute() {
             if (!in_use) return false;
 
-            int opcode = (instruction >> 26) & 0x3f;
-            int funct = instruction & 0x3f;
-            
-            alu.generate_control_inputs(ALU_op, funct, opcode);
+            control_t control;
+            control.decode(instruction);
 
-            // TODO: fix alu_zero logic
-            uint32_t alu_zero = 0;
-            result = alu.execute(op1, op2, alu_zero);
+            int opcode = (instruction >> 26) & 0x3f;
+            int shamt = (instruction >> 6) & 0x1f;
+            int funct = instruction & 0x3f;
+            uint32_t imm = (instruction & 0xffff);
+            //int addr = instruction & 0x3ffffff;
+    
+            // Execution 
+            alu.generate_control_inputs(control.ALU_op, funct, opcode);
+   
+            // Sign Extend Or Zero Extend the immediate
+            // Using Arithmetic right shift in order to replicate 1 
+            imm = control.zero_extend ? imm : (imm >> 15) ? 0xffff0000 | imm : imm;
+    
+            // Find operands for the ALU Execution
+            // Operand 1 is always R[rs] -> read_data_1, except sll and srl
+            // Operand 2 is immediate if ALU_src = 1, for I-type
+            uint32_t operand_1 = control.shift ? shamt : op1;
+            uint32_t operand_2 = control.ALU_src ? imm : op2;
+            alu_zero = 0;
+
+            result = alu.execute(operand_1, operand_2, alu_zero);
           
             in_use = false;
             return true;

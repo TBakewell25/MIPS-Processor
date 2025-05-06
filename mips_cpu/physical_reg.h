@@ -183,6 +183,12 @@ class PhysicalRegisterUnit {
         uint32_t getValue(int reg) {
             return physTable[reg];
         }
+
+        // write to the physical register
+        void writeRegister(int phys_reg, uint32_t val) {
+            physTable[phys_reg] = val;
+            regReady[phys_reg] = true;
+        }
         
         // get number of free physical registers
         int freeRegistersCount() {
@@ -191,7 +197,7 @@ class PhysicalRegisterUnit {
         
         // mark a ROB entry as completed with result
         void completeROBEntry(int rob_index, uint32_t result) {
-            if (rob_index < 0 || rob_index >= reorderBuffer.size())
+            if (rob_index < 0 || rob_index >= (int) reorderBuffer.size())
                 return;
                 
             reorderBuffer[rob_index].completed = true;
