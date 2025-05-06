@@ -29,6 +29,7 @@ class PhysicalRegisterUnit {
             int old_phys_reg;    // Previous mapping for recovery
             bool completed;      // Has the instruction completed execution?
             uint32_t result;     // Result value
+            bool ready_to_commit;
         };
 
         class RAT {
@@ -180,13 +181,22 @@ class PhysicalRegisterUnit {
         }
         
         // mark a ROB entry as completed with result
-        void completeROBEntry(int rob_index, uint32_t result) {
-            if (rob_index < 0 || rob_index >= (int) reorderBuffer.size())
-                return;
-                
-            reorderBuffer[rob_index].completed = true;
-            reorderBuffer[rob_index].result = result;
-        }
+        void completeROBEntry(int phys_reg, uint32_t result) {
+            // Iterate through all valid entries in the ROB
+            int i = head;
+            do {
+                // If this entry is for the specified physical register
+                if (reorderBuffer[i].phys_reg == phys_reg) {
+                    // Mark it as completed and store the result
+                    reorderBuffer[i].completed = true;
+                    reorderBuffer[i].result = result;
+                    return;
+                }
+        
+                // Move to next entry (with wrap-around)
+                i = (i + 1) % capacity;
+            } while (i != tail);
+         }
         
         // Check if head of ROB is ready to commit
         bool isHeadReadyToCommit() {
@@ -267,17 +277,6 @@ class PhysicalRegisterUnit {
                 }
             }
         }
-
-        // Update the capacity in constructor
-        PhysicalRegisterUnit(int reg_count) {
-            capacity = 32; // Or whatever size you want for ROB
-            head = tail = count = 0;
-            is_full = false;
-    
-            reorderBuffer.resize(capacity);
-    
-            for (int i = ARCH_REG; i < reg_count; i++) 
-                freePhysRegs.push_back(i);
 
         // Update the capacity in constructor
         PhysicalRegisterUnit(int reg_count) {

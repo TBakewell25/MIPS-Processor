@@ -74,6 +74,34 @@ class Processor {
                 int CDB_phys_reg;
                 uint32_t CDB_value; */
 
+                // copy assignment
+                State& operator=(const State& other) {
+                    if (this != &other) {
+                        // Copy instruction queue
+                        instruction_queue = other.instruction_queue;
+        
+                        // Copy reservation stations
+                        for (int i = 0; i < ARITHM_STATIONS; i++)
+                            ArithmeticStations[i] = other.ArithmeticStations[i];
+                        for (int i = 0; i < MEM_STATIONS; i++)
+                            MemoryStations[i] = other.MemoryStations[i];
+            
+                        // Copy execution units
+                        for (int i = 0; i < 4; i++)
+                            ArithUnits[i] = other.ArithUnits[i];
+                        for (int i = 0; i < 2; i++)
+                            MemUnits[i] = other.MemUnits[i];
+            
+                        // Copy CDB entries
+                        for (int i = 0; i < MEM_STATIONS + ARITHM_STATIONS; i++)
+                            CDB[i] = other.CDB[i];
+            
+                        // Deep copy the physical register file
+                        physRegFile = other.physRegFile;
+                    }
+                    return *this;
+                }
+
                 int findOpenCDB() {
                     for (int i = 0; i < MEM_STATIONS + ARITHM_STATIONS; ++i)
                        // potential logic issues

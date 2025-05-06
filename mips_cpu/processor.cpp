@@ -485,13 +485,13 @@ void Processor::commit(){
     
     while (commit_count < COMMIT_WIDTH) {
         // prep new ROB entry
-        PhysicalRegisterUnit::ROBEntry head = nextState.physRegFile.peekHead();
+        PhysicalRegisterUnit::ROBEntry head = currentState.physRegFile.peekHead();
 
-        if (!head.completed)
-            break;
+ //       if (!head.completed)
+  //          break;
 
         // we peeked, now we can actually fetch it
-        PhysicalRegisterUnit::ROBEntry entry = nextState.physRegFile.dequeue();        
+        PhysicalRegisterUnit::ROBEntry entry = currentState.physRegFile.dequeue();        
 
         // good ol' decode logic, nothing new
 //        uint32_t instruction = entry.instruction;
