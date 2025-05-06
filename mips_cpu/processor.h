@@ -88,39 +88,37 @@ class Processor {
                         int selected_station = ready_arith_rs[0];
                         ArithmeticStations[selected_station].executing = true;
 
-
-                        uint32_t instruction = ArithmeticStations[selected_station].instruction;
-
-                        // NOT PROPERLY POPULATED
-                        uint32_t rs_val = ArithmeticStations[selected_station].rs_val;
-                        uint32_t rt_val = ArithmeticStations[selected_station].rt_val;
-        
-                       // send to execution unit (will be processed in execute stage)
-                       // store which reservation station this came from for writeback
-                       // TODO: currently only issues to first 
-
-                       ArithUnits[selected_station].issueInstruction(instruction, rs_val, rt_val, selected_station);
-                          
+                        for (int i = 0; i < 4) {
+                            if (!ArithUnits[i].in_use) {
+                                uint32_t instruction = ArithmeticStations[selected_station].instruction;
+                                uint32_t rs_val = ArithmeticStations[selected_station].rs_val;
+                                uint32_t rt_val = ArithmeticStations[selected_station].rt_val;
+            
+                                ArithUnits[i].issueInstruction(instruction, rs_val, rt_val, selected_station);
+                                break;
+                            }
+                        }
                     }
+
                     // issue to memory station
                     if (!ready_mem_rs.empty()) {
                         int rs_idx = ready_mem_rs[0];
-                        ArithmeticStations[rs_idx].executing = true;
+                        MemoryStations[rs_idx].executing = true;
+                        
+                        for (int i = 0; i < 4) {
+                            if (!MemUnits[i].in_use) {
+                                uint32_t instruction = MemoryStations[rs_idx].instruction;
+                                uint32_t rs_val = MemoryStations[rs_idx].rs_val;
+                                uint32_t rt_val = MemoryStations[rs_idx].rt_val;
+            
+                                MemUnits[i].issueInstruction(instruction, rs_val, rt_val, rs_idx);
+                                break;
+                            }
 
-
-                        uint32_t instruction = ArithmeticStations[rs_idx].instruction;
-                        uint32_t rs_val = ArithmeticStations[rs_idx].rs_val;
-                        uint32_t rt_val = ArithmeticStations[rs_idx].rt_val;
-        
-                       // send to execution unit (will be processed in execute stage)
-                       // store which reservation station this came from for writeback
-
-                      // TODO: currently only issues to first
-                       MemUnits[0].issueInstruction(instruction, rs_val, rt_val, rs_idx);
+                        }
                     }
                 }
 
-    
 
                 // create physical registers and reorder buffer
                 PhysicalRegisterUnit physRegFile = PhysicalRegisterUnit(REG_COUNT);       

@@ -415,6 +415,9 @@ void Processor::execute(){
         nextState.CDB[free_cdb_entry] = CDBEntry(phys_dest, result);
 
         nextState.physRegFile.completeROBEntry(phys_dest, result);
+
+        nextState.ArithmeticStations[source_station].in_use = false;
+        nextState.ArithmeticStations[source_station].executing = false;
     }
 
     for (int j = 0; j < 2; ++j) {
@@ -434,10 +437,13 @@ void Processor::execute(){
         int free_cdb_entry = currentState.findOpenCDB();
 
         // we need to transfer metadata from rs to new cdb entry to broadcast
-        int phys_dest = currentState.ArithmeticStations[source_station].phys_rd;
+        int phys_dest = currentState.MemoryStations[source_station].phys_rd;
         nextState.CDB[free_cdb_entry] = CDBEntry(phys_dest, result);
 
         nextState.physRegFile.completeROBEntry(phys_dest, result);
+
+        nextState.MemoryStations[source_station].in_use = false;
+        nextState.MemoryStations[source_station].executing = false;
 
 //        markROBEntryCompleted(phys_dest, result);
     }
