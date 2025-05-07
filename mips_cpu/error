@@ -1,0 +1,77 @@
+g++ -g -Wall -std=c++11    -c -o processor.o processor.cpp
+In file included from processor.h:7,
+                 from processor.cpp:4:
+physical_reg.h: In member function ‘void PhysicalRegisterUnit::completeROBEntry(int, uint32_t)’:
+physical_reg.h:192:44: warning: comparison of integer expressions of different signedness: ‘int’ and ‘std::vector<PhysicalRegisterUnit::ROBEntry>::size_type’ {aka ‘long unsigned int’} [-Wsign-compare]
+  192 |             if (rob_index < 0 || rob_index >= reorderBuffer.size())
+      |                                  ~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~
+processor.cpp: In member function ‘void Processor::rename()’:
+processor.cpp:178:5: warning: this ‘if’ clause does not guard... [-Wmisleading-indentation]
+  178 |     if (cold_start > 9)
+      |     ^~
+processor.cpp:180:9: note: ...this statement, but the latter is misleadingly indented as if it were guarded by the ‘if’
+  180 |         return;
+      |         ^~~~~~
+processor.cpp: At global scope:
+processor.cpp:187:28: error: ‘currentState’ was not declared in this scope
+  187 |     uint32_t instruction = currentState.instruction_queue.front();
+      |                            ^~~~~~~~~~~~
+processor.cpp:191:5: error: ‘control’ does not name a type; did you mean ‘control_t’?
+  191 |     control.decode(instruction);
+      |     ^~~~~~~
+      |     control_t
+processor.cpp:204:5: error: expected unqualified-id before ‘if’
+  204 |     if (nextState.check_reorderBuffer())
+      |     ^~
+processor.cpp:208:5: error: expected unqualified-id before ‘if’
+  208 |     if (control.reg_write && nextState.physRegFile.checkFreePhys())
+      |     ^~
+processor.cpp:217:5: error: expected unqualified-id before ‘switch’
+  217 |     switch(instr_type) {
+      |     ^~~~~~
+processor.cpp:245:5: error: expected unqualified-id before ‘if’
+  245 |     if (control.reg_write) {
+      |     ^~
+processor.cpp:251:29: error: ‘nextState’ was not declared in this scope; did you mean ‘setstate’?
+  251 |     int phys_rs = rs != 0 ? nextState.physRegFile.getMapping(rs) : 0;
+      |                             ^~~~~~~~~
+      |                             setstate
+processor.cpp:252:29: error: ‘nextState’ was not declared in this scope; did you mean ‘setstate’?
+  252 |     int phys_rt = rt != 0 ? nextState.physRegFile.getMapping(rt) : 0;
+      |                             ^~~~~~~~~
+      |                             setstate
+processor.cpp:255:5: error: expected unqualified-id before ‘if’
+  255 |     if (control.reg_write && write_reg != 0)
+      |     ^~
+processor.cpp:264:47: error: ‘populateROBEntry’ was not declared in this scope
+  264 |     PhysicalRegisterUnit::ROBEntry toBeSent = populateROBEntry(instruction,
+      |                                               ^~~~~~~~~~~~~~~~
+processor.cpp:271:5: error: expected unqualified-id before ‘switch’
+  271 |     switch(instr_type) {
+      |     ^~~~~~
+processor.cpp:282:5: error: ‘nextState’ does not name a type
+  282 |     nextState.pushToROB(toBeSent);
+      |     ^~~~~~~~~
+processor.cpp:286:5: error: ‘currentState’ does not name a type
+  286 |     currentState.instruction_queue.pop();
+      |     ^~~~~~~~~~~~
+processor.cpp:287:1: error: expected declaration before ‘}’ token
+  287 | }
+      | ^
+processor.cpp: In member function ‘void Processor::commit()’:
+processor.cpp:421:13: warning: unused variable ‘opcode’ [-Wunused-variable]
+  421 |         int opcode = (instruction >> 26) & 0x3f;
+      |             ^~~~~~
+processor.cpp:422:13: warning: unused variable ‘rs’ [-Wunused-variable]
+  422 |         int rs = (instruction >> 21) & 0x1f;
+      |             ^~
+processor.cpp:423:13: warning: unused variable ‘rt’ [-Wunused-variable]
+  423 |         int rt = (instruction >> 16) & 0x1f;
+      |             ^~
+processor.cpp:424:13: warning: unused variable ‘rd’ [-Wunused-variable]
+  424 |         int rd = (instruction >> 11) & 0x1f;
+      |             ^~
+processor.cpp:425:13: warning: unused variable ‘funct’ [-Wunused-variable]
+  425 |         int funct = instruction & 0x3f;
+      |             ^~~~~
+make: *** [<builtin>: processor.o] Error 1

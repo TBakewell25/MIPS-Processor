@@ -1,4 +1,3 @@
-
 CXX = g++
 CXXFLAGS= -g -Wall -std=c++11 #-DENABLE_DEBUG
 OPTFLAGS= -O3
@@ -20,5 +19,3 @@ main.o: memory.h processor.h
 
 clean:
 	$(RM) $(EXE_NAME) $(OBJS)
-
-

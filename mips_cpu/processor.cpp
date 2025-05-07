@@ -1,6 +1,7 @@
 #include <queue>
 #include <cstdint>
 #include <iostream>
+#include <cstring>
 #include "processor.h"
 
 using namespace std;
@@ -14,6 +15,7 @@ using namespace std;
 #define EXEC_UNITS 6      
 #define ARITHM_STATIONS 4
 #define MEM_STATIONS 2 
+#define COMMIT_WIDTH 2
 
 void Processor::initialize(int level) {
     // Initialize Control
@@ -41,6 +43,8 @@ void Processor::initialize(int level) {
 void Processor::advance() {
     switch (opt_level) {
         case 0: single_cycle_processor_advance();
+                break;
+        case 1: test_advance();
                 break;
         case 2: ooo_advance();
                 break;
@@ -134,7 +138,15 @@ int checkInstructionType(uint32_t instruction) {
     return 0;
 }
     
-    
+
+void Processor::testFetch(uint32_t instruction) {
+    //nextState.instruction_queue.push(instruction); 
+          
+    // increment pc
+    regfile.pc += 4;
+}
+
+   
 
 void Processor::fetch() {
     uint32_t instruction;
@@ -143,10 +155,14 @@ void Processor::fetch() {
     // fetch instructions from the cache, exit and try again next cycle on miss
     // send to instruction queue otherwise
     instruction_read = memory->access(regfile.pc, instruction, 0, 1, 0);
-    if (!instruction_read)
+    if (!instruction_read) {
+        stall = true;
         return;
-    else 
-       instruction_queue.push(instruction); 
+    } else {
+        nextState.instruction_queue = instruction;
+        //nextState.instruction_queue.push(instruction); 
+        stall = false;
+    }
           
     // increment pc
     regfile.pc += 4;
@@ -164,10 +180,24 @@ void Processor::fetch() {
 */
 
 void Processor::rename(){
+    if (cold_start > 4)
+        return;
+
+    // new control for each cycle, I don't think signals need to persist
+    control_t control;
+    uint32_t instruction = 0;
+
     // 1. peek at instruction
-    uint32_t instruction = instruction_queue.front();
+    //if (currentState.instruction_queue.size())
+     //   instruction = currentState.instruction_queue.front();
+    
+    if (currentState.instruction_queue)
+        instruction = currentState.instruction_queue;
+    else
+        return;
 
     // 2. decode peeked value
+ //TODO: move control to state class
     control.decode(instruction);
 
     // extract rs, rt, rd
@@ -175,17 +205,17 @@ void Processor::rename(){
     int rt = (instruction >> 16) & 0x1f;
     int rd = (instruction >> 11) & 0x1f;
 
-    int write_reg = control.reg_write ? rd : rt;
+    int write_reg = control.reg_dest ? rd : rt;
 
     // 3. check resources
 
     // exit if there is no reorder buffer spot available
     // logic probably needs work
-    if (!nextState.check_reorderBuffer())
+    if (nextState.check_reorderBuffer())
         return; 
-
+// need to preserve IQ 
     // check for availability of physical registers
-    if (control.reg_write && !nextState.physRegFile.checkFreePhys())
+    if (control.reg_write && nextState.physRegFile.checkFreePhys())
         return;
 
     // 0 arithmetic, 1 memory operation
@@ -231,6 +261,29 @@ void Processor::rename(){
     int phys_rs = rs != 0 ? nextState.physRegFile.getMapping(rs) : 0;
     int phys_rt = rt != 0 ? nextState.physRegFile.getMapping(rt) : 0;
 
+    ReservationStation *station = nullptr;
+    if (instr_type == 0)
+        station = &nextState.ArithmeticStations[available_station_a];
+    else 
+        station = &nextState.MemoryStations[available_station_m];
+
+    // set up the reservation station
+    station->instruction = instruction;    
+    station->phys_rs = phys_rs;
+    station->phys_rt = phys_rt;
+    station->phys_rd = new_phys_reg;
+
+    station->ready_rs = (rs == 0) || nextState.physRegFile.checkReady(phys_rs);
+    station->ready_rt = (rt == 0) || nextState.physRegFile.checkReady(phys_rt);
+    station->in_use = true;
+
+    // if ready set the values
+    if (station->ready_rs) 
+        station->rs_val = (rs == 0) ? 0 : nextState.physRegFile.getValue(phys_rs);
+    
+    if (station->ready_rt)
+        station->rt_val = (rt == 0) ? 0 : nextState.physRegFile.getValue(phys_rt);
+    
     // map the arch write_reg to the allocated "new_phys_reg"
     if (control.reg_write && write_reg != 0)
         nextState.physRegFile.RAT_Unit.updateMapping(write_reg, new_phys_reg);
@@ -247,7 +300,8 @@ void Processor::rename(){
                      old_phys_reg);// not implemented
 
     
-    // 6. Dispatch
+    // 6. Dispatch HANDLED ABOVE
+    /*
     switch(instr_type) {
         case 0:
             nextState.pushToArith(instruction);
@@ -258,12 +312,13 @@ void Processor::rename(){
         default:
             break;
     }
-
+*/
     nextState.pushToROB(toBeSent);  
  
 
     // 7. Remove Instruction
-    instruction_queue.pop();
+    //currentState.instruction_queue.pop();
+    //std::swap(currentState.instruction_queue, nextState.instruction_queue);    
 }
 
 /*
@@ -275,13 +330,15 @@ void Processor::rename(){
 */
 
 void Processor::issue(){
+    if (cold_start > 3)
+        return;
 
     // 1. Monitor results (on CDB)
     for (int i = 0; i < EXEC_UNITS; ++i) {
         if (currentState.CDB[i].valid) {
             // wake up whatever station is waiting
             currentState.wakeUpRS(currentState.CDB[i].phys_reg, currentState.CDB[i].value);
-            currentState.CDB[i].valid = false;
+            //currentState.CDB[i].valid = false; TODO: note, check back here
          }
     }
 
@@ -309,9 +366,22 @@ void Processor::issue(){
         }
     }
 
+    if (!ready_arith_rs.size() && !ready_mem_rs.size())
+        return;
+
     // 4. Dispatch to execution unit
-    currentState.issueToExecutionUnits(ready_arith_rs, ready_mem_rs);
-   
+    nextState.issueToExecutionUnits(ready_arith_rs, ready_mem_rs);
+
+    // push stations to next cycle
+/*    for (int i= 0; i < EXEC_UNITS; ++i) {
+        if (i > 3) {
+            int k = i % 4;
+            nextState.MemUnits[k] = ExecutionUnit(currentState.MemUnits[k]); 
+        } else {
+            nextState.ArithUnits[i] = ExecutionUnit(currentState.ArithUnits[i]); 
+        }
+    }*/
+
 }
 
 /*
@@ -321,54 +391,116 @@ void Processor::issue(){
 */
 
 void Processor::execute(){
+    if (cold_start > 2)
+        return;
+
     for (int j = 0; j < 4; ++j) {
         ExecutionUnit currentUnit = currentState.ArithUnits[j];
+        if (!currentUnit.checkBusy())
+            continue;
+
         // execute the instruction
         currentUnit.execute();
 
         // get the result and the original RS
         uint32_t result = currentUnit.getResult();
-        int source_station = currentUnit.getSourceRS(); 
+        int source_station = currentUnit.getSourceRS();
 
         // queue of for writeback (make CDB entry)
         // TODO: handle no open cdb entry
         int free_cdb_entry = currentState.findOpenCDB();
 
-        // we need to transfer metadata from rs to new cdb entry to broadcast
-        int phys_dest = currentState.ArithmeticStations[source_station].phys_rd;
-        nextState.CDB[free_cdb_entry] = CDBEntry(phys_dest, result);
+        CDBEntry *newCDBEntry = &nextState.CDB[free_cdb_entry];
 
-        // IMPLEMENT ME
-//       markROBEntryCompleted(phys_dest, result);
+        // Use stored ROB index instead of physical register for completion
+        int phys_dest = currentState.ArithmeticStations[source_station].phys_rd;
+        int rob_idx = currentState.ArithmeticStations[source_station].ROB_index;
+        newCDBEntry->valid = true;
+        newCDBEntry->phys_reg = phys_dest;
+        newCDBEntry->result = result;
+
+        nextState.physRegFile.completeROBEntry(rob_idx, result);
+
+        nextState.ArithmeticStations[source_station].in_use = false;
+        nextState.ArithmeticStations[source_station].executing = false;
     }
 
     for (int j = 0; j < 2; ++j) {
         ExecutionUnit currentUnit = currentState.MemUnits[j];
+        if (!currentUnit.checkBusy())
+            continue;
+
         // execute the instruction
         currentUnit.execute();
 
         // get the result and the original RS
         uint32_t result = currentUnit.getResult();
-        int source_station = currentUnit.getSourceRS(); 
+        int source_station = currentUnit.getSourceRS();
 
         // queue of for writeback (make CDB entry)
         // TODO: handle no open cdb entry
         int free_cdb_entry = currentState.findOpenCDB();
 
-        // we need to transfer metadata from rs to new cdb entry to broadcast
-        int phys_dest = currentState.ArithmeticStations[source_station].phys_rd;
+        // Use stored ROB index for memory-load completion
+        int phys_dest = currentState.MemoryStations[source_station].phys_rd;
+        int rob_idx = currentState.MemoryStations[source_station].ROB_index;
         nextState.CDB[free_cdb_entry] = CDBEntry(phys_dest, result);
 
-        // IMPLEMENT ME
-//        markROBEntryCompleted(phys_dest, result);
+        nextState.physRegFile.completeROBEntry(rob_idx, result);
+
+        nextState.MemoryStations[source_station].in_use = false;
+        nextState.MemoryStations[source_station].executing = false;
     }
 }
 
-void Processor::write_back(){}
-void Processor::commit(){}
- 
-void Processor::ooo_advance() {
-    fetch();
+void Processor::write_back(){
+    if (cold_start > 1)
+        return;
+
+    // iterate through CDB entries, update phys reg where necessary
+    for (int i = 0; i < EXEC_UNITS; ++i) {
+        if (currentState.CDB[i].valid) {
+            int phys_reg = currentState.CDB[i].phys_reg;
+            uint32_t result = currentState.CDB[i].result;
+     
+            // write back to physical register 
+            nextState.physRegFile.writeRegister(phys_reg, result);
+
+            // entry is no longer valid
+            nextState.CDB[i].valid = false;
+        }
+    }
+}
+
+void Processor::commit(){
+    if (cold_start > 0)
+        return;
+
+    // bookeeping for committing
+    int commit_count = 0;
+
+    while (commit_count < COMMIT_WIDTH) {
+        // Only retire if head is ready
+        if (!currentState.physRegFile.isHeadReadyToCommit())
+            break;
+        // Commit head and retrieve its data
+        bool didCommit = currentState.physRegFile.commitHead();
+        if (!didCommit) break;
+        auto &entry = currentState.physRegFile.getLastCommittedEntry();
+
+        // Write to architectural register file
+        int dest_reg = entry.dest_reg;
+        if (dest_reg > 0) {
+            uint32_t dummy;
+            regfile.access(0, 0, dummy, dummy, dest_reg, true, entry.result);
+        }
+        commit_count++;
+    }
+}
+
+void Processor::test_advance() {
+    uint32_t instruction = 19546144; //add r8, r9, r10
+    testFetch(instruction);
     rename();
     issue();
     execute();
@@ -376,4 +508,19 @@ void Processor::ooo_advance() {
     commit();
 
     currentState = nextState;
+    cold_start--;
+}           
+void Processor::ooo_advance() {
+    fetch();
+
+    if (!stall) {
+        rename();
+        issue();
+        execute();
+        write_back();
+        commit();
+    }
+
+    currentState = nextState;
+    cold_start--;
 }

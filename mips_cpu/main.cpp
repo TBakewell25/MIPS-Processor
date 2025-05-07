@@ -135,6 +135,11 @@ int main(int argc, char *argv[]) {
 
     memory.setOptLevel(optLevel);
     uint64_t num_cycles = 0;
+
+    // for gdb usage, runs forever
+    if (optLevel == 1)
+        end_pc = 1000000;
+
     while (processor.getPC() <= end_pc) {
         processor.advance();
         cout << "\nCYCLE " << num_cycles << "\n";

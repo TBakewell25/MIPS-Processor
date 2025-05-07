@@ -1,0 +1,41 @@
+g++ -g -Wall -std=c++11    -c -o main.o main.cpp
+In file included from processor.h:7,
+                 from main.cpp:13:
+physical_reg.h: In member function ‘PhysicalRegisterUnit::ROBEntry PhysicalRegisterUnit::dequeue()’:
+physical_reg.h:95:24: error: could not convert ‘4294967295’ from ‘unsigned int’ to ‘PhysicalRegisterUnit::ROBEntry’
+   95 |                 return 0xFFFFFFFF;
+      |                        ^~~~~~~~~~
+      |                        |
+      |                        unsigned int
+processor.h: In member function ‘void Processor::State::pushToROB(ROBEntry)’:
+processor.h:73:49: error: ‘reorderBuffer’ was not declared in this scope; did you mean ‘check_reorderBuffer’?
+   73 |                 void pushToROB(ROBEntry item) { reorderBuffer.enqueue(item); }
+      |                                                 ^~~~~~~~~~~~~
+      |                                                 check_reorderBuffer
+processor.h: In member function ‘void Processor::State::pushToArith(int, uint32_t)’:
+processor.h:76:97: error: no match for ‘operator=’ (operand types are ‘ReservationStation’ and ‘uint32_t’ {aka ‘unsigned int’})
+   76 |                 void pushToArith(int index, uint32_t instruction) { ArithmeticStations[index] = instruction; }
+      |                                                                                                 ^~~~~~~~~~~
+In file included from processor.h:6:
+reservation.h:9:7: note: candidate: ‘ReservationStation& ReservationStation::operator=(const ReservationStation&)’
+    9 | class ReservationStation {
+      |       ^~~~~~~~~~~~~~~~~~
+reservation.h:9:7: note:   no known conversion for argument 1 from ‘uint32_t’ {aka ‘unsigned int’} to ‘const ReservationStation&’
+reservation.h:9:7: note: candidate: ‘ReservationStation& ReservationStation::operator=(ReservationStation&&)’
+reservation.h:9:7: note:   no known conversion for argument 1 from ‘uint32_t’ {aka ‘unsigned int’} to ‘ReservationStation&&’
+processor.h: In member function ‘void Processor::State::pushToMem(int, uint32_t)’:
+processor.h:79:91: error: no match for ‘operator=’ (operand types are ‘ReservationStation’ and ‘uint32_t’ {aka ‘unsigned int’})
+   79 |                 void pushToMem(int index, uint32_t instruction) { MemoryStations[index] = instruction; }
+      |                                                                                           ^~~~~~~~~~~
+reservation.h:9:7: note: candidate: ‘ReservationStation& ReservationStation::operator=(const ReservationStation&)’
+    9 | class ReservationStation {
+      |       ^~~~~~~~~~~~~~~~~~
+reservation.h:9:7: note:   no known conversion for argument 1 from ‘uint32_t’ {aka ‘unsigned int’} to ‘const ReservationStation&’
+reservation.h:9:7: note: candidate: ‘ReservationStation& ReservationStation::operator=(ReservationStation&&)’
+reservation.h:9:7: note:   no known conversion for argument 1 from ‘uint32_t’ {aka ‘unsigned int’} to ‘ReservationStation&&’
+processor.h: In member function ‘ROBEntry Processor::populateROBEntry(uint32_t, int, int, int)’:
+processor.h:152:23: error: ‘struct ROBEntry’ has no member named ‘read_to_commit’; did you mean ‘ready_to_commit’?
+  152 |             new_entry.read_to_commit = false;
+      |                       ^~~~~~~~~~~~~~
+      |                       ready_to_commit
+make: *** [<builtin>: main.o] Error 1
