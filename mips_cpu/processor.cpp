@@ -492,15 +492,10 @@ void Processor::commit(){
             break;
 
         // we peeked, now we can actually fetch it
+        // need to dump both next state and current state since its in both
+        // both are the same, but we'll use currentState
         PhysicalRegisterUnit::ROBEntry entry = currentState.physRegFile.dequeue();        
-
-        // good ol' decode logic, nothing new
-//        uint32_t instruction = entry.instruction;
-//        int opcode = (instruction >> 26) & 0x3f;
-//        int rs = (instruction >> 21) & 0x1f;
-//        int rt = (instruction >> 16) & 0x1f;
-//        int rd = (instruction >> 11) & 0x1f;
-//        int funct = instruction & 0x3f;
+        nextState.physRegFile.dequeue();      // ignore value  
 
         int dest_reg = entry.dest_reg;
     
