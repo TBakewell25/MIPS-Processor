@@ -154,18 +154,23 @@ void Processor::fetch() {
 
     // fetch instructions from the cache, exit and try again next cycle on miss
     // send to instruction queue otherwise
-    instruction_read = memory->access(processor_pc, instruction, 0, 1, 0);
+    instruction_read = memory->access(regfile.pc, instruction, 0, 1, 0);
     if (!instruction_read) {
         stall = true;
         return;
     } else {
-        nextState.instruction_queue = instruction;
+        if (instruction)
+            nextState.instruction_queue = instruction;
         //nextState.instruction_queue.push(instruction); 
         stall = false;
     }
+
+    if (instruction)
+        cout << "Just fetched instruction " << instruction << " at PC: " << regfile.pc << "\n" << endl;
           
     // increment pc
-    processor_pc += 4;
+    regfile.pc += 4;
+    //processor_pc += 4;
 }
 
 /*
@@ -211,12 +216,17 @@ void Processor::rename(){
 
     // exit if there is no reorder buffer spot available
     // logic probably needs work
-    if (nextState.check_reorderBuffer())
+    if (nextState.check_reorderBuffer()) {
+        nextState.instruction_queue = instruction;
         return; 
-// need to preserve IQ 
+    }
+
+    // need to preserve IQ 
     // check for availability of physical registers
-    if (control.reg_write && nextState.physRegFile.checkFreePhys())
+    if (control.reg_write && nextState.physRegFile.checkFreePhys()){
+        nextState.instruction_queue = instruction;
         return;
+    }
 
     // 0 arithmetic, 1 memory operation
     int instr_type = checkInstructionType(instruction); 
@@ -228,15 +238,19 @@ void Processor::rename(){
         case 0:
             available_station_a = nextState.checkStationsArith();
             
-            if (available_station_a < 0)
+            if (available_station_a < 0) {
+                nextState.instruction_queue = instruction;
                 return;
+            }
             break;
 
         case 1:
             available_station_m = nextState.checkStationsMem();
             
-            if (available_station_m < 0)
+            if (available_station_m < 0) {
+                nextState.instruction_queue = instruction;
                 return;
+            }
             break;
 
         default:
@@ -489,7 +503,9 @@ void Processor::commit(){
 
         // TODO: NEED BRANCH AND LOAD/STORE
         commit_count++;
-        regfile.pc += 4;
+        cout << "Committed instruction, processor_pc is " << processor_pc << "\n" << endl;
+        processor_pc+=4;
+//        regfile.pc += 4;
     }
 }
 
