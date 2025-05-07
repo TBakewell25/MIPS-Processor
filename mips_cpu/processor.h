@@ -278,7 +278,7 @@ class Processor {
         void commit();
 
     public:
-        Processor(Memory *mem) { regfile.pc = 0; memory = mem;}
+        Processor(Memory *mem) { regfile.pc = processor_pc = 0; memory = mem;}
         
         // Get PC
         uint32_t getPC() { return regfile.pc; }

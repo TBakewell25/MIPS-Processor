@@ -154,7 +154,7 @@ void Processor::fetch() {
 
     // fetch instructions from the cache, exit and try again next cycle on miss
     // send to instruction queue otherwise
-    instruction_read = memory->access(regfile.pc, instruction, 0, 1, 0);
+    instruction_read = memory->access(processor_pc, instruction, 0, 1, 0);
     if (!instruction_read) {
         stall = true;
         return;
@@ -165,7 +165,7 @@ void Processor::fetch() {
     }
           
     // increment pc
-    regfile.pc += 4;
+    processor_pc += 4;
 }
 
 /*
@@ -511,6 +511,7 @@ void Processor::commit(){
 
         // TODO: NEED BRANCH AND LOAD/STORE
         commit_count++;
+        regfile.pc += 4;
     }
 }
 
