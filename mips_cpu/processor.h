@@ -113,18 +113,24 @@ class Processor {
                 void issueToExecutionUnits(std::vector<int>& ready_arith_rs, std::vector<int>& ready_mem_rs) {
                     // issue to arithmetic unit
                     if (!ready_arith_rs.empty()) {
-                        // select first available station
-                        int selected_station = ready_arith_rs[0];
-                        ArithmeticStations[selected_station].executing = true;
+                        int num_free_stations = ready_arith_rs.size();
 
-                        for (int i = 0; i < 4; ++i) {
-                            if (!ArithUnits[i].checkBusy()) {
-                                uint32_t instruction = ArithmeticStations[selected_station].instruction;
-                                uint32_t rs_val = ArithmeticStations[selected_station].rs_val;
-                                uint32_t rt_val = ArithmeticStations[selected_station].rt_val;
+                        for (int j = 0; j < num_free_stations; ++j) {
+                            int selected_station = ready_arith_rs[j];
+                            if (ArithmeticStations[selected_station].executing == true)
+                                continue;
+
+                            ArithmeticStations[selected_station].executing = true;
+
+                            for (int i = 0; i < 4; ++i) {
+                                if (!ArithUnits[i].checkBusy()) {
+                                    uint32_t instruction = ArithmeticStations[selected_station].instruction;
+                                    uint32_t rs_val = ArithmeticStations[selected_station].rs_val;
+                                    uint32_t rt_val = ArithmeticStations[selected_station].rt_val;
             
-                                ArithUnits[i].issueInstruction(instruction, rs_val, rt_val, selected_station);
-                                break;
+                                    ArithUnits[i].issueInstruction(instruction, rs_val, rt_val, selected_station);
+                                    break;
+                                }
                             }
                         }
                     }

@@ -301,19 +301,7 @@ void Processor::rename(){
 
     
     // 6. Dispatch HANDLED ABOVE
-    /*
-    switch(instr_type) {
-        case 0:
-            nextState.pushToArith(instruction);
-            break;
-        case 1:
-            nextState.pushToMem(instruction);
-            break;
-        default:
-            break;
-    }
-*/
-    nextState.pushToROB(toBeSent);  
+   nextState.pushToROB(toBeSent);  
  
 
     // 7. Remove Instruction
@@ -337,7 +325,7 @@ void Processor::issue(){
     for (int i = 0; i < EXEC_UNITS; ++i) {
         if (currentState.CDB[i].valid) {
             // wake up whatever station is waiting
-            currentState.wakeUpRS(currentState.CDB[i].phys_reg, currentState.CDB[i].value);
+            nextState.wakeUpRS(currentState.CDB[i].phys_reg, currentState.CDB[i].result);
             //currentState.CDB[i].valid = false; TODO: note, check back here
          }
     }
@@ -371,18 +359,8 @@ void Processor::issue(){
 
     // 4. Dispatch to execution unit
     nextState.issueToExecutionUnits(ready_arith_rs, ready_mem_rs);
-
-    // push stations to next cycle
-/*    for (int i= 0; i < EXEC_UNITS; ++i) {
-        if (i > 3) {
-            int k = i % 4;
-            nextState.MemUnits[k] = ExecutionUnit(currentState.MemUnits[k]); 
-        } else {
-            nextState.ArithUnits[i] = ExecutionUnit(currentState.ArithUnits[i]); 
-        }
-    }*/
-
 }
+
 
 /*
 *   Steps for execute stage:
@@ -538,18 +516,6 @@ void Processor::ooo_advance() {
         rename();
     }
     fetch();
-
-/*    fetch();
-
-    if (!stall) {
-        rename();
-        issue();
-        execute();
-        write_back();
-        commit();
-    }
-
-*/
 
     updateState(1);
     cold_start--;
