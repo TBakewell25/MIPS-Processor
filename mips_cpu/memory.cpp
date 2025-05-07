@@ -1,3 +1,4 @@
+#include <string>
 #include <vector>
 #include <cstdint>
 #include <iostream>
@@ -11,6 +12,16 @@
 #endif
 
 using namespace std;
+
+// Cache constructor
+Cache::Cache(std::string nm, int sz, int asc, int penalty)
+  : name(nm), size(sz), assoc(asc), missPenalty(penalty), missCountdown(0)
+{
+    line.resize(size / CACHE_LINE_SIZE);
+    for (size_t i = 0; i < line.size(); ++i) {
+        line[i].valid = false;
+    }
+}
 
 // Check if hit in the cache
 bool Cache::isHit(uint32_t address, uint32_t &loc) {
@@ -140,6 +151,21 @@ void Cache::invalidateLine(uint32_t address) {
     }
 }
 
+// Print a cache line
+void Cache::printLine(uint32_t address) {
+    uint32_t loc = 0;
+    if (!isHit(address, loc)) return;
+    CacheLine &cl = line[loc];
+    std::cout << "Valid:" << cl.valid << "\n";
+    std::cout << "Address:" << cl.address << "\n";
+    std::cout << "Tag:" << cl.tag << "\n";
+    std::cout << "Dirty:" << cl.dirty << "\n";
+    std::cout << "Replacement Bits:" << cl.replBits << "\n";
+    for (int i = 0; i < CACHE_LINE_SIZE/4; ++i) {
+        std::cout << "DATA[" << i << "]: " << cl.data[i] << "\n";
+    }
+}
+
 bool Memory::access(uint32_t address, uint32_t &read_data, uint32_t write_data, bool mem_read, bool mem_write) {
     if (opt_level == 0) {
         if (mem_read) {
@@ -192,4 +218,157 @@ bool Memory::access(uint32_t address, uint32_t &read_data, uint32_t write_data, 
         }
     }
     return false;
+}
+
+// --- NonBlockingCache Method Implementations ---
+
+// Constructor: initialize members in declaration order (cache → sets → assoc → mshrCount → latency → mshr)
+NonBlockingCache::NonBlockingCache(size_t numSets,
+                                   size_t assoc,
+                                   size_t mshrEntries,
+                                   unsigned refillLatency)
+  : cache("", numSets * assoc * CACHE_LINE_SIZE, assoc, refillLatency),
+    sets(numSets),
+    assoc(assoc),
+    mshrCount(mshrEntries),
+    latency(refillLatency),
+    mshr(mshrEntries) {}
+
+// Search for an existing MSHR entry to support miss coalescing
+int NonBlockingCache::findMSHR(uint64_t blockAddr) {
+    for (int i = 0; i < (int)mshrCount; ++i) {
+        if (mshr[i].valid && mshr[i].blockAddr == blockAddr)
+            return i;
+    }
+    return -1;
+}
+
+// Allocate a free MSHR entry; return -1 if none available (structural stall)
+int NonBlockingCache::allocMSHR(uint64_t blockAddr,
+                                bool isLoad,
+                                uint32_t instrId) {
+    for (int i = 0; i < (int)mshrCount; ++i) {
+        if (!mshr[i].valid) {
+            mshr[i].valid = true;
+            mshr[i].blockAddr = blockAddr;
+            mshr[i].isLoad = isLoad;
+            mshr[i].waitingInstrIds.clear();
+            mshr[i].waitingInstrIds.push_back(instrId);
+            return i;
+        }
+    }
+    return -1;
+}
+
+// Access the cache: true+data on hit; false on miss (enqueues MSHR/refill)
+bool NonBlockingCache::access(uint32_t address,
+                              bool isLoad,
+                              uint32_t instrId,
+                              uint32_t &outData) {
+    // Compute block-aligned address for MSHR indexing
+    uint64_t blockAddr = address / CACHE_LINE_SIZE;
+    uint32_t loc;
+    // Hit path: return data immediately from underlying cache
+    if (cache.isHit(address, loc)) {
+        CacheLine line = cache.readLine(address);
+        uint32_t offset = cache.getOffset(address);
+        outData = line.data[offset / 4];
+        cache.updateReplacementBits(cache.getIndex(address), loc % assoc);
+        return true;
+    }
+    // Miss: check if this block is already being fetched (coalesce miss)
+    int idx = findMSHR(blockAddr);
+    if (idx >= 0) {
+        mshr[idx].waitingInstrIds.push_back(instrId);
+        return false;
+    }
+    // Allocate a new MSHR entry for this miss if possible
+    idx = allocMSHR(blockAddr, isLoad, instrId);
+    if (idx < 0) {
+        // Structural stall: MSHR table full
+        return false;
+    }
+    // Schedule cache-line refill after specified latency
+    refillQ.push({blockAddr, static_cast<int>(latency)});
+    return false;
+}
+
+// Each cycle: process the next pending refill request if any
+void NonBlockingCache::tick() {
+    if (refillQ.empty()) return;
+    auto &req = refillQ.front();
+    // Decrement remaining cycles until this refill completes
+    if (--req.second == 0) {
+        // Refill complete: install line into cache and wake waiting instructions
+        uint64_t blockAddr = req.first;
+        refillQ.pop();
+        uint32_t address = blockAddr * CACHE_LINE_SIZE;
+        // Install the filled line into cache (evict if needed)
+        CacheLine newLine;
+        // TODO: copy data bytes from main memory 'mem' into newLine.data[]
+        newLine.address = address;
+        newLine.tag = cache.getTag(address);
+        newLine.valid = true;
+        newLine.dirty = false;
+        // Evicted line goes into 'evicted' so we don't overwrite our newLine buffer
+        CacheLine evicted;
+        cache.replace(address, newLine, evicted);
+        int idx = findMSHR(blockAddr);
+        if (idx >= 0) {
+            for (auto instId : mshr[idx].waitingInstrIds) {
+                // TODO: once fill completes, enqueue 'instId' into the processor's replay/ready queue
+            }
+            mshr[idx].valid = false;
+            mshr[idx].waitingInstrIds.clear();
+        }
+    }
+}
+
+bool NonBlockingCache::read(uint32_t address, uint32_t &outData) {
+    return cache.read(address, outData);
+}
+bool NonBlockingCache::write(uint32_t address, uint32_t writeData) {
+    return cache.write(address, writeData);
+}
+CacheLine NonBlockingCache::readLine(uint32_t address) {
+    return cache.readLine(address);
+}
+void NonBlockingCache::replace(uint32_t address, CacheLine newLine, CacheLine &evictedLine) {
+    cache.replace(address, newLine, evictedLine);
+}
+void NonBlockingCache::writeBackLine(CacheLine evictedLine) {
+    cache.writeBackLine(evictedLine);
+}
+void NonBlockingCache::invalidateLine(uint32_t address) {
+    cache.invalidateLine(address);
+}
+
+// Default Memory constructor
+Memory::Memory()
+  : L1(32768 / CACHE_LINE_SIZE / 8, 8, 16, 12),
+    L2(262144 / CACHE_LINE_SIZE / 8, 8, 32, 59),
+    opt_level(0)
+{
+    mem.resize(2097152, 0);
+}
+
+// Parameterized Memory constructor
+Memory::Memory(size_t size_bytes, int optLevel)
+  : L1(32768 / CACHE_LINE_SIZE / 8, 8, 16, 12),
+    L2(262144 / CACHE_LINE_SIZE / 8, 8, 32, 59),
+    opt_level(optLevel)
+{
+    mem.resize(size_bytes / 4, 0);
+}
+
+// Change optimization level
+void Memory::setOptLevel(int level) {
+    opt_level = level;
+}
+
+// Print memory contents
+void Memory::print(uint32_t address, int num_words) {
+    for (uint32_t i = address; i < address + num_words; ++i) {
+        std::cout << "MEM[" << std::hex << i << "]: " << mem[i] << std::dec << "\n";
+    }
 }

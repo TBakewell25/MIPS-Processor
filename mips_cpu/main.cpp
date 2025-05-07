@@ -96,11 +96,13 @@ int main(int argc, char *argv[]) {
     int option_index = 0;
     bool initialized = false;
 
-    Memory memory;
-    Processor processor(&memory); 
-    uint32_t end_pc = 0;
+    // Configure memory subsystem
+    size_t memSize = 2097152 * 4; // total memory bytes (default 2M words)
+    int optLevel = 0;             // initial optimization level
 
-    int optLevel = 0;
+    Memory memory(memSize, optLevel);
+    Processor processor(memSize, optLevel); 
+    uint32_t end_pc = 0;
 
     while (true) {
       char c = getopt_long(argc, argv, "b:O01234h", long_options, &option_index);
@@ -136,7 +138,13 @@ int main(int argc, char *argv[]) {
     memory.setOptLevel(optLevel);
     uint64_t num_cycles = 0;
 
-    while (processor.getPC() <= end_pc + 64) {
+
+    // for gdb usage, runs forever
+    if (optLevel == 1)
+        end_pc = 1000000;
+
+    while (processor.getPC() <= end_pc) {
+
         processor.advance();
         cout << "\nCYCLE " << num_cycles << "\n";
         processor.printRegFile();

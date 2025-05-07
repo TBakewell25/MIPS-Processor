@@ -3,6 +3,7 @@
 #include <iostream>
 #include <cstring>
 #include "processor.h"
+#include "memory.h"
 
 using namespace std;
 
@@ -55,7 +56,7 @@ void Processor::advance() {
 void Processor::single_cycle_processor_advance() {
     // fetch
     uint32_t instruction;
-    memory->access(regfile.pc, instruction, 0, 1, 0);
+    memory.access(regfile.pc, instruction, 0, 1, 0);
     //DEBUG(cout << "\nPC: 0x" << std::hex << regfile.pc << std::dec << "\n");
     // increment pc
     regfile.pc += 4;
@@ -102,12 +103,12 @@ void Processor::single_cycle_processor_advance() {
 
     // Memory
     // First read no matter whether it is a load or a store
-    memory->access(alu_result, read_data_mem, 0, control.mem_read | control.mem_write, 0);
+    memory.access(alu_result, read_data_mem, 0, control.mem_read | control.mem_write, 0);
     // Stores: sb or sh mask and preserve original leftmost bits
     write_data_mem = control.halfword ? (read_data_mem & 0xffff0000) | (read_data_2 & 0xffff) : 
                     control.byte ? (read_data_mem & 0xffffff00) | (read_data_2 & 0xff): read_data_2;
     // Write to memory only if mem_write is 1, i.e store
-    memory->access(alu_result, read_data_mem, write_data_mem, control.mem_read, control.mem_write);
+    memory.access(alu_result, read_data_mem, write_data_mem, control.mem_read, control.mem_write);
     // Loads: lbu or lhu modify read data by masking
     read_data_mem &= control.halfword ? 0xffff : control.byte ? 0xff : 0xffffffff;
 
@@ -154,7 +155,8 @@ void Processor::fetch() {
 
     // fetch instructions from the cache, exit and try again next cycle on miss
     // send to instruction queue otherwise
-    instruction_read = memory->access(regfile.pc, instruction, 0, 1, 0);
+
+    instruction_read = memory.access(regfile.pc, instruction, 0, 1, 0);
     if (!instruction_read) {
         stall = true;
         return;
@@ -170,7 +172,6 @@ void Processor::fetch() {
           
     // increment pc
     regfile.pc += 4;
-    //processor_pc += 4;
 }
 
 /*
@@ -443,7 +444,8 @@ void Processor::execute(){
 
         nextState.MemoryStations[source_station].in_use = false;
         nextState.MemoryStations[source_station].executing = false;
-        nextState.MemUnits[j].setOpen();
+
+//        markROBEntryCompleted(phys_dest, result);
     }
 }
 
@@ -484,10 +486,15 @@ void Processor::commit(){
             break;
 
         // we peeked, now we can actually fetch it
-        // need to dump both next state and current state since its in both
-        // both are the same, but we'll use currentState
         PhysicalRegisterUnit::ROBEntry entry = currentState.physRegFile.dequeue();        
-        nextState.physRegFile.dequeue();      // ignore value  
+
+        // good ol' decode logic, nothing new
+//        uint32_t instruction = entry.instruction;
+//        int opcode = (instruction >> 26) & 0x3f;
+//        int rs = (instruction >> 21) & 0x1f;
+//        int rt = (instruction >> 16) & 0x1f;
+//        int rd = (instruction >> 11) & 0x1f;
+//        int funct = instruction & 0x3f;
 
         int dest_reg = entry.dest_reg;
     
@@ -503,9 +510,10 @@ void Processor::commit(){
 
         // TODO: NEED BRANCH AND LOAD/STORE
         commit_count++;
+
         cout << "Committed instruction, processor_pc is " << processor_pc << "\n" << endl;
         processor_pc+=4;
-//        regfile.pc += 4;
+
     }
 }
 
