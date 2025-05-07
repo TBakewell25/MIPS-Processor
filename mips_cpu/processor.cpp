@@ -412,6 +412,7 @@ void Processor::execute(){
 
         CDBEntry *newCDBEntry = &nextState.CDB[free_cdb_entry];
 
+
         // Use stored ROB index instead of physical register for completion
         int phys_dest = currentState.ArithmeticStations[source_station].phys_rd;
         int rob_idx = currentState.ArithmeticStations[source_station].ROB_index;

@@ -29,6 +29,7 @@ class PhysicalRegisterUnit {
             int old_phys_reg;    // Previous mapping for recovery
             bool completed;      // Has the instruction completed execution?
             uint32_t result;     // Result value
+            bool ready_to_commit;
         };
 
         class RAT {
