@@ -424,6 +424,7 @@ void Processor::execute(){
 
         nextState.ArithmeticStations[source_station].in_use = false;
         nextState.ArithmeticStations[source_station].executing = false;
+        nextState.ArithUnits[j].setOpen();
     }
 
     for (int j = 0; j < 2; ++j) {
@@ -450,8 +451,7 @@ void Processor::execute(){
 
         nextState.MemoryStations[source_station].in_use = false;
         nextState.MemoryStations[source_station].executing = false;
-
-//        markROBEntryCompleted(phys_dest, result);
+        nextState.MemUnits[j].setOpen();
     }
 }
 

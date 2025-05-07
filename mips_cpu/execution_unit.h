@@ -32,6 +32,7 @@ class ExecutionUnit {
         } 
 
         bool checkBusy() { return in_use; }
+        void setOpen() { in_use = false; }
 
         virtual void issueInstruction(uint32_t instr, uint32_t oper1, uint32_t oper2, int station_idx) {
             instruction = instr;
