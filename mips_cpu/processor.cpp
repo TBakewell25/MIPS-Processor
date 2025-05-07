@@ -155,15 +155,20 @@ void Processor::fetch() {
 
     // fetch instructions from the cache, exit and try again next cycle on miss
     // send to instruction queue otherwise
+
     instruction_read = memory.access(regfile.pc, instruction, 0, 1, 0);
     if (!instruction_read) {
         stall = true;
         return;
     } else {
-        nextState.instruction_queue = instruction;
+        if (instruction)
+            nextState.instruction_queue = instruction;
         //nextState.instruction_queue.push(instruction); 
         stall = false;
     }
+
+    if (instruction)
+        cout << "Just fetched instruction " << instruction << " at PC: " << regfile.pc << "\n" << endl;
           
     // increment pc
     regfile.pc += 4;
@@ -212,12 +217,17 @@ void Processor::rename(){
 
     // exit if there is no reorder buffer spot available
     // logic probably needs work
-    if (nextState.check_reorderBuffer())
+    if (nextState.check_reorderBuffer()) {
+        nextState.instruction_queue = instruction;
         return; 
-// need to preserve IQ 
+    }
+
+    // need to preserve IQ 
     // check for availability of physical registers
-    if (control.reg_write && nextState.physRegFile.checkFreePhys())
+    if (control.reg_write && nextState.physRegFile.checkFreePhys()){
+        nextState.instruction_queue = instruction;
         return;
+    }
 
     // 0 arithmetic, 1 memory operation
     int instr_type = checkInstructionType(instruction); 
@@ -229,15 +239,19 @@ void Processor::rename(){
         case 0:
             available_station_a = nextState.checkStationsArith();
             
-            if (available_station_a < 0)
+            if (available_station_a < 0) {
+                nextState.instruction_queue = instruction;
                 return;
+            }
             break;
 
         case 1:
             available_station_m = nextState.checkStationsMem();
             
-            if (available_station_m < 0)
+            if (available_station_m < 0) {
+                nextState.instruction_queue = instruction;
                 return;
+            }
             break;
 
         default:
@@ -302,19 +316,7 @@ void Processor::rename(){
 
     
     // 6. Dispatch HANDLED ABOVE
-    /*
-    switch(instr_type) {
-        case 0:
-            nextState.pushToArith(instruction);
-            break;
-        case 1:
-            nextState.pushToMem(instruction);
-            break;
-        default:
-            break;
-    }
-*/
-    nextState.pushToROB(toBeSent);  
+   nextState.pushToROB(toBeSent);  
  
 
     // 7. Remove Instruction
@@ -338,7 +340,7 @@ void Processor::issue(){
     for (int i = 0; i < EXEC_UNITS; ++i) {
         if (currentState.CDB[i].valid) {
             // wake up whatever station is waiting
-            currentState.wakeUpRS(currentState.CDB[i].phys_reg, currentState.CDB[i].value);
+            nextState.wakeUpRS(currentState.CDB[i].phys_reg, currentState.CDB[i].result);
             //currentState.CDB[i].valid = false; TODO: note, check back here
          }
     }
@@ -372,18 +374,8 @@ void Processor::issue(){
 
     // 4. Dispatch to execution unit
     nextState.issueToExecutionUnits(ready_arith_rs, ready_mem_rs);
-
-    // push stations to next cycle
-/*    for (int i= 0; i < EXEC_UNITS; ++i) {
-        if (i > 3) {
-            int k = i % 4;
-            nextState.MemUnits[k] = ExecutionUnit(currentState.MemUnits[k]); 
-        } else {
-            nextState.ArithUnits[i] = ExecutionUnit(currentState.ArithUnits[i]); 
-        }
-    }*/
-
 }
+
 
 /*
 *   Steps for execute stage:
@@ -518,6 +510,10 @@ void Processor::commit(){
 
         // TODO: NEED BRANCH AND LOAD/STORE
         commit_count++;
+
+        cout << "Committed instruction, processor_pc is " << processor_pc << "\n" << endl;
+        processor_pc+=4;
+
     }
 }
 
@@ -544,18 +540,6 @@ void Processor::ooo_advance() {
         rename();
     }
     fetch();
-
-/*    fetch();
-
-    if (!stall) {
-        rename();
-        issue();
-        execute();
-        write_back();
-        commit();
-    }
-
-*/
 
     updateState(1);
     cold_start--;
