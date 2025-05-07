@@ -135,6 +135,7 @@ int main(int argc, char *argv[]) {
 
     memory.setOptLevel(optLevel);
     uint64_t num_cycles = 0;
+
     while (processor.getPC() <= end_pc) {
         processor.advance();
         cout << "\nCYCLE " << num_cycles << "\n";
