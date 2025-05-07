@@ -160,8 +160,7 @@ void Processor::fetch() {
         return;
     } else {
         if (instruction)
-            nextState.instruction_queue = instruction;
-        //nextState.instruction_queue.push(instruction); 
+            nextState.instruction_queue.push(instruction); 
         stall = false;
     }
 
@@ -193,11 +192,8 @@ void Processor::rename(){
     uint32_t instruction = 0;
 
     // 1. peek at instruction
-    //if (currentState.instruction_queue.size())
-     //   instruction = currentState.instruction_queue.front();
-    
-    if (currentState.instruction_queue)
-        instruction = currentState.instruction_queue;
+    if (currentState.instruction_queue.size())
+        instruction = currentState.instruction_queue.front();
     else
         return;
 
@@ -216,17 +212,13 @@ void Processor::rename(){
 
     // exit if there is no reorder buffer spot available
     // logic probably needs work
-    if (nextState.check_reorderBuffer()) {
-        nextState.instruction_queue = instruction;
+    if (nextState.check_reorderBuffer())
         return; 
-    }
 
     // need to preserve IQ 
     // check for availability of physical registers
-    if (control.reg_write && nextState.physRegFile.checkFreePhys()){
-        nextState.instruction_queue = instruction;
+    if (control.reg_write && nextState.physRegFile.checkFreePhys())
         return;
-    }
 
     // 0 arithmetic, 1 memory operation
     int instr_type = checkInstructionType(instruction); 
@@ -238,19 +230,15 @@ void Processor::rename(){
         case 0:
             available_station_a = nextState.checkStationsArith();
             
-            if (available_station_a < 0) {
-                nextState.instruction_queue = instruction;
+            if (available_station_a < 0)
                 return;
-            }
             break;
 
         case 1:
             available_station_m = nextState.checkStationsMem();
             
-            if (available_station_m < 0) {
-                nextState.instruction_queue = instruction;
+            if (available_station_m < 0)
                 return;
-            }
             break;
 
         default:
@@ -319,7 +307,7 @@ void Processor::rename(){
  
 
     // 7. Remove Instruction
-    //currentState.instruction_queue.pop();
+    nextState.instruction_queue.pop();
     //std::swap(currentState.instruction_queue, nextState.instruction_queue);    
 }
 
