@@ -404,7 +404,7 @@ void Processor::execute(){
 
         // get the result and the original RS
         uint32_t result = currentUnit.getResult();
-        int source_station = currentUnit.getSourceRS(); 
+        int source_station = currentUnit.getSourceRS();
 
         // queue of for writeback (make CDB entry)
         // TODO: handle no open cdb entry
@@ -412,14 +412,15 @@ void Processor::execute(){
 
         CDBEntry *newCDBEntry = &nextState.CDB[free_cdb_entry];
 
-        // we need to transfer metadata from rs to new cdb entry to broadcast
+
+        // Use stored ROB index instead of physical register for completion
         int phys_dest = currentState.ArithmeticStations[source_station].phys_rd;
+        int rob_idx = currentState.ArithmeticStations[source_station].ROB_index;
         newCDBEntry->valid = true;
         newCDBEntry->phys_reg = phys_dest;
         newCDBEntry->result = result;
-        //nextState.CDB[free_cdb_entry] = CDBEntry(phys_dest, result);
 
-        nextState.physRegFile.completeROBEntry(phys_dest, result);
+        nextState.physRegFile.completeROBEntry(rob_idx, result);
 
         nextState.ArithmeticStations[source_station].in_use = false;
         nextState.ArithmeticStations[source_station].executing = false;
@@ -435,22 +436,21 @@ void Processor::execute(){
 
         // get the result and the original RS
         uint32_t result = currentUnit.getResult();
-        int source_station = currentUnit.getSourceRS(); 
+        int source_station = currentUnit.getSourceRS();
 
         // queue of for writeback (make CDB entry)
         // TODO: handle no open cdb entry
         int free_cdb_entry = currentState.findOpenCDB();
 
-        // we need to transfer metadata from rs to new cdb entry to broadcast
+        // Use stored ROB index for memory-load completion
         int phys_dest = currentState.MemoryStations[source_station].phys_rd;
+        int rob_idx = currentState.MemoryStations[source_station].ROB_index;
         nextState.CDB[free_cdb_entry] = CDBEntry(phys_dest, result);
 
-        nextState.physRegFile.completeROBEntry(phys_dest, result);
+        nextState.physRegFile.completeROBEntry(rob_idx, result);
 
         nextState.MemoryStations[source_station].in_use = false;
         nextState.MemoryStations[source_station].executing = false;
-
-//        markROBEntryCompleted(phys_dest, result);
     }
 }
 
@@ -467,9 +467,6 @@ void Processor::write_back(){
             // write back to physical register 
             nextState.physRegFile.writeRegister(phys_reg, result);
 
-            // ROB entry is ready to commit, mark it
-            nextState.physRegFile.markReadyToCommit(phys_reg);
-
             // entry is no longer valid
             nextState.CDB[i].valid = false;
         }
@@ -481,39 +478,23 @@ void Processor::commit(){
         return;
 
     // bookeeping for committing
-    int commit_count = 0; 
-    
+    int commit_count = 0;
+
     while (commit_count < COMMIT_WIDTH) {
-        // prep new ROB entry
-        PhysicalRegisterUnit::ROBEntry head = currentState.physRegFile.peekHead();
+        // Only retire if head is ready
+        if (!currentState.physRegFile.isHeadReadyToCommit())
+            break;
+        // Commit head and retrieve its data
+        bool didCommit = currentState.physRegFile.commitHead();
+        if (!didCommit) break;
+        auto &entry = currentState.physRegFile.getLastCommittedEntry();
 
- //       if (!head.completed)
-  //          break;
-
-        // we peeked, now we can actually fetch it
-        PhysicalRegisterUnit::ROBEntry entry = currentState.physRegFile.dequeue();        
-
-        // good ol' decode logic, nothing new
-//        uint32_t instruction = entry.instruction;
-//        int opcode = (instruction >> 26) & 0x3f;
-//        int rs = (instruction >> 21) & 0x1f;
-//        int rt = (instruction >> 16) & 0x1f;
-//        int rd = (instruction >> 11) & 0x1f;
-//        int funct = instruction & 0x3f;
-
+        // Write to architectural register file
         int dest_reg = entry.dest_reg;
-    
         if (dest_reg > 0) {
-            // write to arch reg
             uint32_t dummy;
             regfile.access(0, 0, dummy, dummy, dest_reg, true, entry.result);
-           
-            // free up phys reg in RAT and elsewhere as necessary 
-            if (entry.old_phys_reg != -1) 
-                nextState.physRegFile.freePhysReg(entry.old_phys_reg);
         }
-
-        // TODO: NEED BRANCH AND LOAD/STORE
         commit_count++;
     }
 }

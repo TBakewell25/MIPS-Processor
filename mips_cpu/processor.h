@@ -276,8 +276,6 @@ class Processor {
             new_entry.phys_reg = phys_reg;
             new_entry.old_phys_reg = old_phys_reg;
             new_entry.completed = false;
-            new_entry.ready_to_commit = false;
-            new_entry.result = 0;
 
             return new_entry;
          }    

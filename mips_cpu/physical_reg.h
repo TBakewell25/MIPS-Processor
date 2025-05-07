@@ -95,20 +95,21 @@ class PhysicalRegisterUnit {
 
         bool checkFreePhys() { return freePhysRegs.empty(); }
         // Enqueue operation
-        // 0 on success, -1 on error
+        // Returns the ROB index on success, -1 on error
         int enqueue(ROBEntry value) {
-            if (is_full) 
+            if (is_full)
                 return -1;
 
             reorderBuffer[tail] = value;
+            int rob_index = tail;
             tail = (tail + 1) % capacity;
-        
+
             // Check if reorder buffer is now full
             if (head == tail) {
                 is_full = true;
             }
 
-            return 0;
+            return rob_index;
         }
 
         // Dequeue operation
@@ -181,22 +182,11 @@ class PhysicalRegisterUnit {
         }
         
         // mark a ROB entry as completed with result
-        void completeROBEntry(int phys_reg, uint32_t result) {
-            // Iterate through all valid entries in the ROB
-            int i = head;
-            do {
-                // If this entry is for the specified physical register
-                if (reorderBuffer[i].phys_reg == phys_reg) {
-                    // Mark it as completed and store the result
-                    reorderBuffer[i].completed = true;
-                    reorderBuffer[i].result = result;
-                    return;
-                }
-        
-                // Move to next entry (with wrap-around)
-                i = (i + 1) % capacity;
-            } while (i != tail);
-         }
+        void completeROBEntry(int rob_index, uint32_t result) {
+            if (rob_index < 0 || rob_index >= capacity) return;
+            reorderBuffer[rob_index].completed = true;
+            reorderBuffer[rob_index].result    = result;
+        }
         
         // Check if head of ROB is ready to commit
         bool isHeadReadyToCommit() {
@@ -250,32 +240,6 @@ class PhysicalRegisterUnit {
         // After a successful commitHead(), retrieve the committed entry
         const ROBEntry& getLastCommittedEntry() const {
             return lastCommittedEntry;
-        }
-
-        // Peek at head without removing it
-        ROBEntry peekHead() {
-            if (isEmpty()) {
-            // Return an empty/invalid entry
-                ROBEntry empty;
-                empty.dest_reg = -1;
-                empty.phys_reg = -1;
-                empty.old_phys_reg = -1;
-                empty.completed = false;
-                empty.ready_to_commit = false;
-                return empty;
-            }
-            return reorderBuffer[head];
-        }
-
-        // Mark a ROB entry as ready to commit
-        void markReadyToCommit(int phys_reg) {
-            for (int i = 0; i < capacity; i++) {
-                int idx = (head + i) % capacity;
-                if (reorderBuffer[idx].phys_reg == phys_reg && reorderBuffer[idx].completed) {
-                    reorderBuffer[idx].ready_to_commit = true;
-                    return;
-                }
-            }
         }
 
         // Update the capacity in constructor
