@@ -295,7 +295,7 @@ void Processor::rename(){
  
     // 5. Create ROBEntry
     PhysicalRegisterUnit::ROBEntry toBeSent = populateROBEntry(instruction,
-                     rd,
+                     write_reg,
                      new_phys_reg, // not implemented
                      old_phys_reg);// not implemented
 
@@ -420,6 +420,7 @@ void Processor::execute(){
         //nextState.CDB[free_cdb_entry] = CDBEntry(phys_dest, result);
 
         nextState.physRegFile.completeROBEntry(phys_dest, result);
+        
 
         nextState.ArithmeticStations[source_station].in_use = false;
         nextState.ArithmeticStations[source_station].executing = false;
@@ -487,8 +488,8 @@ void Processor::commit(){
         // prep new ROB entry
         PhysicalRegisterUnit::ROBEntry head = currentState.physRegFile.peekHead();
 
- //       if (!head.completed)
-  //          break;
+        if (!head.completed)
+            break;
 
         // we peeked, now we can actually fetch it
         PhysicalRegisterUnit::ROBEntry entry = currentState.physRegFile.dequeue();        
@@ -531,7 +532,18 @@ void Processor::test_advance() {
     cold_start--;
 }           
 void Processor::ooo_advance() {
+    updateState(0); // push current state forward
+
+    if (!stall) {
+        commit();
+        write_back();
+        execute();
+        issue();
+        rename();
+    }
     fetch();
+
+/*    fetch();
 
     if (!stall) {
         rename();
@@ -541,6 +553,8 @@ void Processor::ooo_advance() {
         commit();
     }
 
-    currentState = nextState;
+*/
+
+    updateState(1);
     cold_start--;
 }

@@ -86,6 +86,39 @@ class PhysicalRegisterUnit {
 
     public:
 
+        PhysicalRegisterUnit& operator=(const PhysicalRegisterUnit& other) {
+            if (this != &other) {
+                // Copy physical register table
+                for (int i = 0; i < ARCH_REG * 4; i++) {
+                    physTable[i] = other.physTable[i];
+                }
+
+                // Copy free physical registers list
+                freePhysRegs = other.freePhysRegs;
+
+                // Copy register ready flags
+                for (int i = 0; i < REG_COUNT; i++) {
+                    regReady[i] = other.regReady[i];
+                }
+
+                // Deep copy the reorder buffer
+                reorderBuffer = other.reorderBuffer;
+
+                // Copy circular buffer management variables
+                head = other.head;
+                tail = other.tail;
+                capacity = other.capacity;
+                is_full = other.is_full;
+
+                // Copy the last committed entry
+                lastCommittedEntry = other.lastCommittedEntry;
+
+                // Copy the Register Alias Table
+                RAT_Unit = other.RAT_Unit;
+            }
+            return *this;
+        }
+
         bool checkReady(int phys_reg) { return regReady[phys_reg]; }
 
         // Register Alias Table implementation
@@ -181,12 +214,12 @@ class PhysicalRegisterUnit {
         }
         
         // mark a ROB entry as completed with result
-        void completeROBEntry(int phys_reg, uint32_t result) {
+        void completeROBEntry(int phys_dest, uint32_t result) {
             // Iterate through all valid entries in the ROB
             int i = head;
             do {
                 // If this entry is for the specified physical register
-                if (reorderBuffer[i].phys_reg == phys_reg) {
+                if (reorderBuffer[i].phys_reg == phys_dest) {
                     // Mark it as completed and store the result
                     reorderBuffer[i].completed = true;
                     reorderBuffer[i].result = result;

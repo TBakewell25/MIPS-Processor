@@ -74,6 +74,7 @@ class Processor {
                 int CDB_phys_reg;
                 uint32_t CDB_value; */
 
+                
                 // copy assignment
                 State& operator=(const State& other) {
                     if (this != &other) {
@@ -226,6 +227,32 @@ class Processor {
         State currentState = State();
         State nextState = State();
 
+        void safeStateCopy(State& dest, const State& src) {
+            // Copy instruction queue
+            dest.instruction_queue = src.instruction_queue;
+    
+            // Copy reservation stations
+            for (int i = 0; i < ARITHM_STATIONS; i++)
+                dest.ArithmeticStations[i] = src.ArithmeticStations[i];
+            for (int i = 0; i < MEM_STATIONS; i++)
+                dest.MemoryStations[i] = src.MemoryStations[i];
+    
+            // Copy execution units
+            for (int i = 0; i < 4; i++)
+                dest.ArithUnits[i] = src.ArithUnits[i];
+            for (int i = 0; i < 2; i++)
+                dest.MemUnits[i] = src.MemUnits[i];
+    
+            // Copy CDB entries
+            for (int i = 0; i < MEM_STATIONS + ARITHM_STATIONS; i++)
+                dest.CDB[i] = src.CDB[i];
+    
+            // Deep copy the physical register file
+            dest.physRegFile = src.physRegFile;
+    
+        }
+
+
         // common data bus is just a vector for simplicity, might need to do more 
         std::vector<uint32_t> CommonDataBus;
 
@@ -264,6 +291,13 @@ class Processor {
 
         // Advances the processor to an appropriate state every cycle
         void advance(); 
+
+        void updateState(int switchVal) {
+            if (switchVal)
+                safeStateCopy(currentState, nextState);
+            else
+                safeStateCopy(nextState, currentState);
+        }
 
         PhysicalRegisterUnit::ROBEntry populateROBEntry(uint32_t instruction,
                                   int dest_reg,  
