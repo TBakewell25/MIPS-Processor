@@ -1,3 +1,4 @@
+#include <cstddef>
 #include <queue>
 #include "memory.h"
 #include "regfile.h"
@@ -23,7 +24,7 @@ class Processor {
         int opt_level;
         ALU alu;
         control_t control;
-        Memory *memory;
+        Memory memory;
         Registers regfile;
     
         uint32_t processor_pc; // an additional pc to track 
@@ -134,7 +135,7 @@ class Processor {
                         int rs_idx = ready_mem_rs[0];
                         MemoryStations[rs_idx].executing = true;
                         
-                        for (int i = 0; i < 4; ++i) {
+                        for (int i = 0; i < 2; ++i) {
                             if (!MemUnits[i].checkBusy()) {
                                 uint32_t instruction = MemoryStations[rs_idx].instruction;
                                 uint32_t rs_val = MemoryStations[rs_idx].rs_val;
@@ -278,7 +279,12 @@ class Processor {
         void commit();
 
     public:
-        Processor(Memory *mem) { regfile.pc = processor_pc = 0; memory = mem;}
+        Processor(size_t memSize, int optLevel)
+          : memory(memSize, optLevel)
+        {
+            opt_level = optLevel;
+            regfile.pc = 0;
+        }
         
         // Get PC
         uint32_t getPC() { return regfile.pc; }

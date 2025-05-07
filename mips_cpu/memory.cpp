@@ -1,3 +1,4 @@
+#include <string>
 #include <vector>
 #include <cstdint>
 #include <iostream>
@@ -11,6 +12,16 @@
 #endif
 
 using namespace std;
+
+// Cache constructor
+Cache::Cache(std::string nm, int sz, int asc, int penalty)
+  : name(nm), size(sz), assoc(asc), missPenalty(penalty), missCountdown(0)
+{
+    line.resize(size / CACHE_LINE_SIZE);
+    for (size_t i = 0; i < line.size(); ++i) {
+        line[i].valid = false;
+    }
+}
 
 // Check if hit in the cache
 bool Cache::isHit(uint32_t address, uint32_t &loc) {
@@ -137,6 +148,21 @@ void Cache::invalidateLine(uint32_t address) {
         if (line[idx*assoc+w].valid && line[idx*assoc+w].tag == tag) {
             line[idx*assoc+w].valid = false;
         }
+    }
+}
+
+// Print a cache line
+void Cache::printLine(uint32_t address) {
+    uint32_t loc = 0;
+    if (!isHit(address, loc)) return;
+    CacheLine &cl = line[loc];
+    std::cout << "Valid:" << cl.valid << "\n";
+    std::cout << "Address:" << cl.address << "\n";
+    std::cout << "Tag:" << cl.tag << "\n";
+    std::cout << "Dirty:" << cl.dirty << "\n";
+    std::cout << "Replacement Bits:" << cl.replBits << "\n";
+    for (int i = 0; i < CACHE_LINE_SIZE/4; ++i) {
+        std::cout << "DATA[" << i << "]: " << cl.data[i] << "\n";
     }
 }
 
@@ -295,5 +321,54 @@ void NonBlockingCache::tick() {
             mshr[idx].valid = false;
             mshr[idx].waitingInstrIds.clear();
         }
+    }
+}
+
+bool NonBlockingCache::read(uint32_t address, uint32_t &outData) {
+    return cache.read(address, outData);
+}
+bool NonBlockingCache::write(uint32_t address, uint32_t writeData) {
+    return cache.write(address, writeData);
+}
+CacheLine NonBlockingCache::readLine(uint32_t address) {
+    return cache.readLine(address);
+}
+void NonBlockingCache::replace(uint32_t address, CacheLine newLine, CacheLine &evictedLine) {
+    cache.replace(address, newLine, evictedLine);
+}
+void NonBlockingCache::writeBackLine(CacheLine evictedLine) {
+    cache.writeBackLine(evictedLine);
+}
+void NonBlockingCache::invalidateLine(uint32_t address) {
+    cache.invalidateLine(address);
+}
+
+// Default Memory constructor
+Memory::Memory()
+  : L1(32768 / CACHE_LINE_SIZE / 8, 8, 16, 12),
+    L2(262144 / CACHE_LINE_SIZE / 8, 8, 32, 59),
+    opt_level(0)
+{
+    mem.resize(2097152, 0);
+}
+
+// Parameterized Memory constructor
+Memory::Memory(size_t size_bytes, int optLevel)
+  : L1(32768 / CACHE_LINE_SIZE / 8, 8, 16, 12),
+    L2(262144 / CACHE_LINE_SIZE / 8, 8, 32, 59),
+    opt_level(optLevel)
+{
+    mem.resize(size_bytes / 4, 0);
+}
+
+// Change optimization level
+void Memory::setOptLevel(int level) {
+    opt_level = level;
+}
+
+// Print memory contents
+void Memory::print(uint32_t address, int num_words) {
+    for (uint32_t i = address; i < address + num_words; ++i) {
+        std::cout << "MEM[" << std::hex << i << "]: " << mem[i] << std::dec << "\n";
     }
 }
