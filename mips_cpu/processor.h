@@ -59,8 +59,8 @@ class Processor {
             public:
 
                 // an instruction queue to get instructions from fetch to rename stages  
-                //std::queue<uint32_t>instruction_queue;
-                uint32_t instruction_queue; // 1 instruction at a time for now
+                std::queue<uint32_t>instruction_queue;
+                //uint32_t instruction_queue; // 1 instruction at a time for now
                 // Reservation Stations
                 ReservationStation ArithmeticStations[ARITHM_STATIONS];
                 ReservationStation MemoryStations[MEM_STATIONS];
@@ -77,7 +77,7 @@ class Processor {
                     if (this != &other) {
                         // Copy instruction queue
                         instruction_queue = other.instruction_queue;
-        
+ 
                         // Copy reservation stations
                         for (int i = 0; i < ARITHM_STATIONS; i++)
                             ArithmeticStations[i] = other.ArithmeticStations[i];

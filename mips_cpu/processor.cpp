@@ -160,8 +160,8 @@ void Processor::fetch() {
         return;
     } else {
         if (instruction)
-            nextState.instruction_queue = instruction;
-        //nextState.instruction_queue.push(instruction); 
+            //nextState.instruction_queue = instruction;
+            nextState.instruction_queue.push(instruction); 
         stall = false;
     }
 
@@ -196,8 +196,8 @@ void Processor::rename(){
     //if (currentState.instruction_queue.size())
      //   instruction = currentState.instruction_queue.front();
     
-    if (currentState.instruction_queue)
-        instruction = currentState.instruction_queue;
+    if (currentState.instruction_queue.size())
+        instruction = currentState.instruction_queue.front();
     else
         return;
 
@@ -217,14 +217,14 @@ void Processor::rename(){
     // exit if there is no reorder buffer spot available
     // logic probably needs work
     if (nextState.check_reorderBuffer()) {
-        nextState.instruction_queue = instruction;
+        //nextState.instruction_queue = instruction;
         return; 
     }
 
     // need to preserve IQ 
     // check for availability of physical registers
     if (control.reg_write && nextState.physRegFile.checkFreePhys()){
-        nextState.instruction_queue = instruction;
+        //nextState.instruction_queue = instruction;
         return;
     }
 
@@ -240,7 +240,7 @@ void Processor::rename(){
             available_station_a = nextState.checkStationsArith();
             
             if (available_station_a < 0) {
-                nextState.instruction_queue = instruction;
+           //     nextState.instruction_queue = instruction;
                 return;
             }
             break;
@@ -249,7 +249,7 @@ void Processor::rename(){
             available_station_m = nextState.checkStationsMem();
             
             if (available_station_m < 0) {
-                nextState.instruction_queue = instruction;
+         //       nextState.instruction_queue = instruction;
                 return;
             }
             break;
@@ -257,7 +257,7 @@ void Processor::rename(){
             available_station_m = nextState.checkStationsMem();
             
             if (available_station_m < 0) {
-                nextState.instruction_queue = instruction;
+          //      nextState.instruction_queue = instruction;
                 return;
             }
             break;
@@ -329,13 +329,16 @@ void Processor::rename(){
         int store_idx = nextState.memUnit.addStore(ROB_index, size);        
         station->mem_op_index = store_idx;
         station->is_store = true;
+        station->is_load = false;
     } else if (instr_type == 2) { // load
         int load_idx = nextState.memUnit.addLoad(ROB_index, new_phys_reg, size);
         station->mem_op_index = load_idx;
         station->is_load = true;
+        station->is_store = false;
     }
     // 7. Remove Instruction
-    //currentState.instruction_queue.pop();
+    currentState.instruction_queue.pop();
+    nextState.instruction_queue.pop();
     //std::swap(currentState.instruction_queue, nextState.instruction_queue);    
 }
 
@@ -499,6 +502,8 @@ void Processor::execute(){
                 } 
             } else {
                 nextState.MemUnits[j] = currentUnit; // miss, push to next cycle
+                nextState.MemUnits[j].in_use = true;
+                //nextState.MemUnits[j].executing = true;
             }
         }
     }
@@ -561,6 +566,7 @@ void Processor::commit(){
         int instr_type = checkInstructionType(head.instruction); 
 
         if (instr_type == 1) { //store
+            nextState.memUnit.executeStore(0, memory);
             bool committed = nextState.memUnit.commitStore(head.rob_index, memory); // do the store
             if (!committed) { // fail
                 return;     
@@ -581,7 +587,7 @@ void Processor::commit(){
             nextState.memUnit.removeLoad(entry.rob_index);
         } 
 
-        if (dest_reg > 0) {
+        if (dest_reg > 0 && instr_type != 1) {
             // write to arch reg
             uint32_t dummy;
             regfile.access(0, 0, dummy, dummy, dest_reg, true, entry.result);

@@ -137,6 +137,7 @@ class PhysicalRegisterUnit {
         bool checkFreePhys() { return freePhysRegs.empty(); }
         // Enqueue operation
         // 0 on success, -1 on error
+
         int enqueue(ROBEntry value) {
             if (is_full) 
                 return -1;
@@ -148,7 +149,7 @@ class PhysicalRegisterUnit {
         
             return index;
         }
-
+        
         // Dequeue operation
         ROBEntry dequeue() {
             ROBEntry value = reorderBuffer[head];
