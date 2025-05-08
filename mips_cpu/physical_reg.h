@@ -176,7 +176,6 @@ class PhysicalRegisterUnit {
                 
             int reg = freePhysRegs.front();
             freePhysRegs.erase(freePhysRegs.begin());
-            freePhysRegs.pop_back();
             regReady[reg] = false; // not ready until written
             return reg;
         }
