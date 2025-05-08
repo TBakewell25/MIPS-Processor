@@ -401,8 +401,20 @@ void Processor::execute(){
 
         // queue of for writeback (make CDB entry)
         // TODO: handle no open cdb entry
-        int free_cdb_entry = currentState.findOpenCDB();
-
+        int free_cdb_entry = nextState.findOpenCDB();
+        if (free_cdb_entry >= 0) {
+            int phys_dest = currentState.ArithmeticStations[source_station].phys_rd;
+            nextState.CDB[free_cdb_entry].valid = true;
+            nextState.CDB[free_cdb_entry].phys_reg = phys_dest;
+            nextState.CDB[free_cdb_entry].result = result;
+    
+            nextState.physRegFile.completeROBEntry(phys_dest, result);
+    
+            nextState.ArithmeticStations[source_station].in_use = false;
+            nextState.ArithmeticStations[source_station].executing = false;
+            nextState.ArithUnits[j].setOpen();
+        }
+/*
         CDBEntry *newCDBEntry = &nextState.CDB[free_cdb_entry];
 
         // we need to transfer metadata from rs to new cdb entry to broadcast
@@ -417,8 +429,9 @@ void Processor::execute(){
 
         nextState.ArithmeticStations[source_station].in_use = false;
         nextState.ArithmeticStations[source_station].executing = false;
-        nextState.ArithUnits[j].setOpen();
+        nextState.ArithUnits[j].setOpen(); */
     }
+
 
     for (int j = 0; j < 2; ++j) {
         ExecutionUnit currentUnit = currentState.MemUnits[j];
