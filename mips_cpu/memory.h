@@ -1,19 +1,9 @@
 #ifndef MEMORY
 #define MEMORY
 #include <vector>
-#include <queue>
 #include <cstdint>
 #include <iostream>
-#include <string>
 #include <cmath>
-#include <cstddef>
-
-struct MSHREntry {
-    uint64_t blockAddr;               // block-aligned address
-    bool     valid        = false;    // entry in use?
-    bool     isLoad = false;          // load vs store (default false)
-    std::vector<uint32_t> waitingInstrIds; // instructions waiting on this block
-};
 
 #define CACHE_LINE_SIZE 64
 
@@ -35,7 +25,19 @@ class Cache {
         int missCountdown;
         std::string name;
     public:
-        Cache(std::string nm, int sz, int asc, int penalty);
+        Cache(std::string nm, int sz, int asc, int penalty) {
+            name = nm;
+            size = sz;
+            assoc = asc;
+            line.resize(size/CACHE_LINE_SIZE);
+
+            for (int i = 0; i < (size/CACHE_LINE_SIZE); i++) {
+                line[i].valid = false;
+            }
+            
+            missCountdown = 0;
+            missPenalty = penalty;
+        }
 
         // offset, index, tag computation
         int getOffset(uint32_t address) {
@@ -73,59 +75,40 @@ class Cache {
         void invalidateLine(uint32_t address);
 
         // Print a cache line
-        void printLine(uint32_t address);
-};
+        void printLine(uint32_t address) {
+            int idx = getIndex(address);
+            int tag = getTag(address);
 
-class NonBlockingCache {
-public:
-    NonBlockingCache(size_t numSets,
-                     size_t assoc,
-                     size_t mshrEntries,
-                     unsigned refillLatency);
-
-    // Access the cache: true+data on hit; false on miss
-    bool access(uint32_t address,
-                bool isLoad,
-                uint32_t instrId,
-                uint32_t &outData);
-
-    // Advance outstanding misses each cycle
-    void tick();
-
-    // Underlying cache operations
-    bool read(uint32_t address, uint32_t &outData);
-    bool write(uint32_t address, uint32_t writeData);
-    CacheLine readLine(uint32_t address);
-    void replace(uint32_t address, CacheLine newLine, CacheLine &evictedLine);
-    void writeBackLine(CacheLine evictedLine);
-    void invalidateLine(uint32_t address);
-
-private:
-    // Find existing MSHR entry or -1
-    int findMSHR(uint64_t blockAddr);
-
-    // Allocate a free MSHR entry or -1
-    int allocMSHR(uint64_t blockAddr,
-                  bool isLoad,
-                  uint32_t instrId);
-
-    Cache cache;  // underlying blocking cache for tag/data arrays
-    size_t sets, assoc, mshrCount, latency;
-    std::vector<MSHREntry> mshr;
-    std::queue<std::pair<uint64_t,int>> refillQ;
+            for (int w=0; w<assoc; w++) {
+                if (line[idx*assoc+w].valid && line[idx*assoc+w].tag == tag) {
+                    std::cout<< "Valid:" << line[idx*assoc+w].valid << "\n";
+                    std::cout<< "Address:" << line[idx*assoc+w].address << "\n";
+                    std::cout<< "Tag:" << line[idx*assoc+w].tag << "\n";
+                    std::cout<< "Dirty:" << line[idx*assoc+w].dirty << "\n";
+                    std::cout<< "Replacement Bits:" << line[idx*assoc+w].replBits << "\n";
+                    for (int i = 0; i < CACHE_LINE_SIZE/4; i++) {
+                        std::cout<< "DATA[" << i << "]: " << line[idx*assoc+w].data[i] << "\n";
+                    }
+                    return;
+                }
+            }
+        }
 };
 
 class Memory {
     private:
         std::vector<uint32_t> mem;
-        NonBlockingCache L1;
-        NonBlockingCache L2;
+        Cache L1 = Cache("L1", 32768, 8, 12);
+        Cache L2 = Cache("L2", 262144, 8, 59);
         int opt_level;
     public:
-        Memory();
-        Memory(size_t size_bytes, int optLevel);
-
-        void setOptLevel(int level);
+        Memory() {
+            mem.resize(2097152, 0);
+            opt_level = 0;
+        }
+        void setOptLevel(int level) {
+            opt_level = level;
+        }
         // address is the adress which needs to be read or written from
         // read_data the variable into which data is read, it is passed by reference
         // write_data is the data which is written into the memory address provided
@@ -137,7 +120,11 @@ class Memory {
 
         // given a starting address and number of words from that starting address
         // this function prints int values at the memory
-        void print(uint32_t address, int num_words);
+        void print(uint32_t address, int num_words) {
+            for (uint32_t i = address; i < address+num_words; ++i) {
+                std::cout<< "MEM[" << std::hex << i << "]: " << mem[i] << std::dec << "\n";
+            }
+        }
 };
 
 #endif
