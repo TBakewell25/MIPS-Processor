@@ -58,8 +58,8 @@ class Processor {
             public:
 
                 // an instruction queue to get instructions from fetch to rename stages  
-                std::queue<uint32_t>instruction_queue;
-                //uint32_t instruction_queue; // 1 instruction at a time for now
+                //std::queue<uint32_t>instruction_queue;
+                uint32_t instruction_queue; // 1 instruction at a time for now
                 // Reservation Stations
                 ReservationStation ArithmeticStations[ARITHM_STATIONS];
                 ReservationStation MemoryStations[MEM_STATIONS];
