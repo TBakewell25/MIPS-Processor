@@ -29,6 +29,9 @@ class ReservationStation {
         bool in_use;
         bool executing;
 
+        int mem_op_index; // location in memory queue, only for load/store
+        bool is_load;
+        bool is_store;
 
         ReservationStation() {
             in_use = false;

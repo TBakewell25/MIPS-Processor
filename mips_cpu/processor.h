@@ -6,6 +6,7 @@
 #include "reservation.h"
 #include "physical_reg.h"
 #include "execution_unit.h"
+#include "load_store.h"
 
 #ifdef enable_debug
 #define debug(x) x
@@ -68,13 +69,9 @@ class Processor {
                 ExecutionUnit MemUnits[2];
 
                 CDBEntry CDB[MEM_STATIONS + ARITHM_STATIONS];
-    
-                /* Common Data Bus signals
-                bool CDB_valid;
-                int CDB_phys_reg;
-                uint32_t CDB_value; */
+   
+                MemoryOperationUnit memUnit; 
 
-                
                 // copy assignment
                 State& operator=(const State& other) {
                     if (this != &other) {
@@ -99,6 +96,7 @@ class Processor {
             
                         // Deep copy the physical register file
                         physRegFile = other.physRegFile;
+                        memUnit = other.memUnit;
                     }
                     return *this;
                 }
@@ -162,7 +160,7 @@ class Processor {
                 bool check_reorderBuffer() { return physRegFile.isFull(); }
 
                 // push to state's instance of ROB
-                void pushToROB(PhysicalRegisterUnit::ROBEntry item) { physRegFile.enqueue(item); }
+                int pushToROB(PhysicalRegisterUnit::ROBEntry item) { return physRegFile.enqueue(item); }
 
                 int checkStationsArith() {
                     for (int i = 0; i < ARITHM_STATIONS; ++i) {
@@ -203,13 +201,31 @@ class Processor {
                
                 // wakeup every station
                 void wakeUpRS(int phys_reg, uint32_t value) {
-                    int stations = MEM_STATIONS + ARITHM_STATIONS;
-                    for (int i = 0; i < stations; ++i) {
-                        bool arith = i < ARITHM_STATIONS;
-                        int index = i < ARITHM_STATIONS ? i : i % ARITHM_STATIONS;
-
+                    for (int i = 0; i < ARITHM_STATIONS; ++i) {
+                        int index = i;
                         //ReservationStation &rs;
-                        ReservationStation &rs = arith ? ArithmeticStations[index] : MemoryStations[index];
+                        ReservationStation &rs = ArithmeticStations[index];
+
+                        if (rs.checkStation()) {
+                            // update source if waiting on this tag
+
+                            // if the source isn't ready, and its the same as our physical register
+                            if (!rs.ready_rs && rs.phys_rs == phys_reg) {
+                                rs.ready_rs = true;
+                                rs.rs_val = value;
+                            }
+                 
+                            // if the rt isn't ready, and its the same as our physical
+                            if (!rs.ready_rt && rs.phys_rt == phys_reg) {
+                                rs.ready_rt = true;
+                                rs.rt_val = value;
+                            }
+                        }
+                    }
+                    for (int i = 0; i < MEM_STATIONS; ++i) {
+                        int index = i;
+                        //ReservationStation &rs;
+                        ReservationStation &rs = MemoryStations[index];
 
                         if (rs.checkStation()) {
                             // update source if waiting on this tag

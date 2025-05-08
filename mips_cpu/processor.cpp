@@ -132,7 +132,7 @@ int checkInstructionType(uint32_t instruction) {
         return 1;
 
     if ((opcode >= 0x23 && opcode <= 0x25) || opcode == 0x30) // Loads
-        return 1;
+        return 2;
 
     // base case, arithmetic
     return 0;
@@ -230,6 +230,7 @@ void Processor::rename(){
 
     // 0 arithmetic, 1 memory operation
     int instr_type = checkInstructionType(instruction); 
+    int size = control.byte ? 1 : control.halfword ? 2 : 4; // for memory ops
 
     // check availability of reservation stations
     int available_station_a = -1;
@@ -252,7 +253,14 @@ void Processor::rename(){
                 return;
             }
             break;
-
+        case 2:
+            available_station_m = nextState.checkStationsMem();
+            
+            if (available_station_m < 0) {
+                nextState.instruction_queue = instruction;
+                return;
+            }
+            break;
         default:
             break;
     }    
@@ -302,7 +310,7 @@ void Processor::rename(){
     if (control.reg_write && write_reg != 0)
         nextState.physRegFile.RAT_Unit.updateMapping(write_reg, new_phys_reg);
 
-
+    
     // now that we have actually read data from the reg file we can send along instructions
     // TODO: need to be able to read from phys regs, not arch regs
     // TODO: add actual way to push instruction data, not instruction itself.
@@ -315,9 +323,17 @@ void Processor::rename(){
 
     
     // 6. Dispatch HANDLED ABOVE
-   nextState.pushToROB(toBeSent);  
+    int ROB_index = nextState.pushToROB(toBeSent);  
  
-
+    if (instr_type == 1) { // store
+        int store_idx = nextState.memUnit.addStore(ROB_index, size);        
+        station->mem_op_index = store_idx;
+        station->is_store = true;
+    } else if (instr_type == 2) { // load
+        int load_idx = nextState.memUnit.addLoad(ROB_index, new_phys_reg, size);
+        station->mem_op_index = load_idx;
+        station->is_load = true;
+    }
     // 7. Remove Instruction
     //currentState.instruction_queue.pop();
     //std::swap(currentState.instruction_queue, nextState.instruction_queue);    
@@ -441,9 +457,54 @@ void Processor::execute(){
         currentUnit.execute();
 
         // get the result and the original RS
-        uint32_t result = currentUnit.getResult();
+        uint32_t address = currentUnit.getResult();
         int source_station = currentUnit.getSourceRS(); 
 
+        int mem_op_idx = currentState.MemoryStations[source_station].mem_op_index; // get the index in l/s queue
+        //nextState.memOpQueue.markOpReady(mem_op_idx, calculated_address); // mark ready
+        if (currentState.MemoryStations[source_station].is_store) { // store
+            nextState.memUnit.updateStore(mem_op_idx, address, currentUnit.op2);
+        
+            // Mark the ROB entry as completed (it will be committed later)
+            int rob_idx = nextState.memUnit.store_queue[mem_op_idx].rob_index;
+            nextState.physRegFile.completeByIndex(rob_idx, address);
+        
+            // Free the reservation station and execution unit
+            nextState.MemoryStations[source_station].in_use = false;
+            nextState.MemoryStations[source_station].executing = false;
+            nextState.MemUnits[j].setOpen();
+
+        } else if (currentState.MemoryStations[source_station].is_load) {
+            nextState.memUnit.updateLoad(mem_op_idx, address);
+            uint32_t result;
+
+            bool success = nextState.memUnit.executeLoad(mem_op_idx, memory, result);
+            if (success) {
+                // Send the result to the CDB
+                int free_cdb_entry = nextState.findOpenCDB();
+                if (free_cdb_entry >= 0) {
+                    int phys_dest = currentState.MemoryStations[source_station].phys_rd;
+                
+                    nextState.CDB[free_cdb_entry].valid = true;
+                    nextState.CDB[free_cdb_entry].phys_reg = phys_dest;
+                    nextState.CDB[free_cdb_entry].result = result;
+                
+                    // Mark the ROB entry as completed
+                    nextState.physRegFile.completeROBEntry(phys_dest, result);
+                
+                    // Free the reservation station and execution unit
+                    nextState.MemoryStations[source_station].in_use = false;
+                    nextState.MemoryStations[source_station].executing = false;
+                    nextState.MemUnits[j].setOpen();
+                } 
+            } else {
+                nextState.MemUnits[j] = currentUnit; // miss, push to next cycle
+            }
+        }
+    }
+} 
+            
+/*
         // queue of for writeback (make CDB entry)
         // TODO: handle no open cdb entry
         int free_cdb_entry = currentState.findOpenCDB();
@@ -459,6 +520,7 @@ void Processor::execute(){
         nextState.MemUnits[j].setOpen();
     }
 }
+*/
 
 void Processor::write_back(){
     if (cold_start > 1)
@@ -495,6 +557,15 @@ void Processor::commit(){
 
         if (!head.completed)
             break;
+        
+        int instr_type = checkInstructionType(head.instruction); 
+
+        if (instr_type == 1) { //store
+            bool committed = nextState.memUnit.commitStore(head.rob_index, memory); // do the store
+            if (!committed) { // fail
+                return;     
+            }
+        }
 
         // we peeked, now we can actually fetch it
         // need to dump both next state and current state since its in both
@@ -503,7 +574,13 @@ void Processor::commit(){
         nextState.physRegFile.dequeue();      // ignore value  
 
         int dest_reg = entry.dest_reg;
-    
+        uint32_t instruction = entry.instruction;
+                
+        if (instr_type == 2) {
+            // For loads, just remove from the queue
+            nextState.memUnit.removeLoad(entry.rob_index);
+        } 
+
         if (dest_reg > 0) {
             // write to arch reg
             uint32_t dummy;

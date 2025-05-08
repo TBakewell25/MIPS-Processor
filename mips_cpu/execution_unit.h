@@ -1,7 +1,7 @@
 #include "ALU.h"
 
 class ExecutionUnit {
-    protected:
+    public:
         bool in_use; 
 
         uint32_t instruction;

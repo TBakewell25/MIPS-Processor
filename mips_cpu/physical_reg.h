@@ -30,6 +30,7 @@ class PhysicalRegisterUnit {
             bool completed;      // Has the instruction completed execution?
             uint32_t result;     // Result value
             bool ready_to_commit;
+            int rob_index;
         };
 
         class RAT {
@@ -101,8 +102,15 @@ class PhysicalRegisterUnit {
                     regReady[i] = other.regReady[i];
                 }
 
+                capacity = other.capacity;
+                reorderBuffer.resize(capacity);
+        
+                for (int i = 0; i < capacity; i++) {
+                    reorderBuffer[i] = other.reorderBuffer[i];
+                }
+
                 // Deep copy the reorder buffer
-                reorderBuffer = other.reorderBuffer;
+//                reorderBuffer = other.reorderBuffer;
 
                 // Copy circular buffer management variables
                 head = other.head;
@@ -133,15 +141,12 @@ class PhysicalRegisterUnit {
             if (is_full) 
                 return -1;
 
+            value.rob_index = tail;
             reorderBuffer[tail] = value;
+            int index = tail;
             tail = (tail + 1) % capacity;
         
-            // Check if reorder buffer is now full
-            if (head == tail) {
-                is_full = true;
-            }
-
-            return 0;
+            return index;
         }
 
         // Dequeue operation
@@ -229,6 +234,15 @@ class PhysicalRegisterUnit {
                 // Move to next entry (with wrap-around)
                 i = (i + 1) % capacity;
             } while (i != tail);
+         }
+
+         // for load stores
+         void completeByIndex(int index, uint32_t result) {
+             if (index >= reorderBuffer.size())
+                 return;
+             reorderBuffer[index].completed = true;
+             reorderBuffer[index].result = result;
+             return;
          }
         
         // Check if head of ROB is ready to commit
