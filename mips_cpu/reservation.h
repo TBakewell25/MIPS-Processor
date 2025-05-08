@@ -29,6 +29,9 @@ class ReservationStation {
         bool in_use;
         bool executing;
 
+        // for memory operations, where in data structures is it?
+        uint32_t load_queue_index, 
+                 store_buffer_index;
 
         ReservationStation() {
             in_use = false;

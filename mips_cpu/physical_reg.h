@@ -141,7 +141,7 @@ class PhysicalRegisterUnit {
                 is_full = true;
             }
 
-            return 0;
+            return tail;
         }
 
         // Dequeue operation

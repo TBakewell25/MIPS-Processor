@@ -313,10 +313,24 @@ void Processor::rename(){
                      new_phys_reg, // not implemented
                      old_phys_reg);// not implemented
 
-    
+     
     // 6. Dispatch HANDLED ABOVE
-   nextState.pushToROB(toBeSent);  
+    int ROB_index = nextState.pushToROB(toBeSent);  
  
+    // load store logic   
+    if (is_load_instruction(instruction)) {
+       int load_queue_index = nextState.loadQueue.enqueueLoad(0, size, ROB_index);
+
+       station->load_queue_index = load_queue_index;
+    }
+
+    if (is_store_instruction(instruction)) {
+       int store_buffer_index = nextState.storeBuffer.enqueue(0, 0, size, ROB_index);
+
+       station->store_buffer_index = store_buffer_index;
+    }
+
+    // store buffer logic
 
     // 7. Remove Instruction
     //currentState.instruction_queue.pop();

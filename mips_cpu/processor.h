@@ -6,6 +6,7 @@
 #include "reservation.h"
 #include "physical_reg.h"
 #include "execution_unit.h"
+#include "load_store.h"
 
 #ifdef enable_debug
 #define debug(x) x
@@ -68,7 +69,10 @@ class Processor {
                 ExecutionUnit MemUnits[2];
 
                 CDBEntry CDB[MEM_STATIONS + ARITHM_STATIONS];
-    
+   
+                StoreBuffer storeBuffer;
+                LoadQueue loadQueue;
+ 
                 /* Common Data Bus signals
                 bool CDB_valid;
                 int CDB_phys_reg;
@@ -162,7 +166,7 @@ class Processor {
                 bool check_reorderBuffer() { return physRegFile.isFull(); }
 
                 // push to state's instance of ROB
-                void pushToROB(PhysicalRegisterUnit::ROBEntry item) { physRegFile.enqueue(item); }
+                int pushToROB(PhysicalRegisterUnit::ROBEntry item) { return physRegFile.enqueue(item); }
 
                 int checkStationsArith() {
                     for (int i = 0; i < ARITHM_STATIONS; ++i) {
