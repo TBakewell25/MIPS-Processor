@@ -159,9 +159,13 @@ void Processor::fetch() {
         stall = true;
         return;
     } else {
-        if (instruction)
+        if (instruction) {
+            if (instruction == 2888040456) {
+               cout << "found instruction at " << regfile.pc << "\n";
+            }
             //nextState.instruction_queue = instruction;
             nextState.instruction_queue.push(instruction); 
+        }
         stall = false;
     }
 
@@ -326,12 +330,12 @@ void Processor::rename(){
     int ROB_index = nextState.pushToROB(toBeSent);  
  
     if (instr_type == 1) { // store
-        int store_idx = nextState.memUnit.addStore(ROB_index, size);        
+        int store_idx = nextState.memUnit.addStore(ROB_index, size, instruction);        
         station->mem_op_index = store_idx;
         station->is_store = true;
         station->is_load = false;
     } else if (instr_type == 2) { // load
-        int load_idx = nextState.memUnit.addLoad(ROB_index, new_phys_reg, size);
+        int load_idx = nextState.memUnit.addLoad(ROB_index, new_phys_reg, size, instruction);
         station->mem_op_index = load_idx;
         station->is_load = true;
         station->is_store = false;
@@ -463,13 +467,17 @@ void Processor::execute(){
         uint32_t address = currentUnit.getResult();
         int source_station = currentUnit.getSourceRS(); 
 
-        int mem_op_idx = currentState.MemoryStations[source_station].mem_op_index; // get the index in l/s queue
+          
+        //int mem_op_idx = currentState.MemoryStations[source_station].mem_op_index; // get the index in l/s queue
         //nextState.memOpQueue.markOpReady(mem_op_idx, calculated_address); // mark ready
         if (currentState.MemoryStations[source_station].is_store) { // store
-            nextState.memUnit.updateStore(mem_op_idx, address, currentUnit.op2);
+            int mem_op_idx_store = nextState.memUnit.findByInstructionStore(currentUnit.instruction);
+            int rob_idx = nextState.physRegFile.searchByInstruction(currentUnit.instruction);
+            //int rob_idx = nextState.memUnit.store_queue[mem_op_idx_store].rob_index;
+
+            nextState.memUnit.updateStore(mem_op_idx_store, address, currentUnit.op2);
         
             // Mark the ROB entry as completed (it will be committed later)
-            int rob_idx = nextState.memUnit.store_queue[mem_op_idx].rob_index;
             nextState.physRegFile.completeByIndex(rob_idx, address);
         
             // Free the reservation station and execution unit
@@ -478,10 +486,14 @@ void Processor::execute(){
             nextState.MemUnits[j].setOpen();
 
         } else if (currentState.MemoryStations[source_station].is_load) {
-            nextState.memUnit.updateLoad(mem_op_idx, address);
+            int mem_op_idx_load = nextState.memUnit.findByInstructionLoad(currentUnit.instruction);
+            int rob_idx = nextState.physRegFile.searchByInstruction(currentUnit.instruction);
+            //int rob_idx = nextState.memUnit.load_queue[mem_op_idx_load].rob_index;
+
+            nextState.memUnit.updateLoad(mem_op_idx_load, address);
             uint32_t result;
 
-            bool success = nextState.memUnit.executeLoad(mem_op_idx, memory, result);
+            bool success = nextState.memUnit.executeLoad(mem_op_idx_load, memory, result);
             if (success) {
                 // Send the result to the CDB
                 int free_cdb_entry = nextState.findOpenCDB();

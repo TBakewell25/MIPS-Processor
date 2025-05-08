@@ -127,6 +127,14 @@ class PhysicalRegisterUnit {
             return *this;
         }
 
+        int searchByInstruction(uint32_t instruction) {
+            for (int j = 0; j < reorderBuffer.size(); ++j) {
+                if (reorderBuffer[j].instruction == instruction)
+                    return j;
+             }
+             return -1;
+        }
+
         bool checkReady(int phys_reg) { return regReady[phys_reg]; }
 
         // Register Alias Table implementation
@@ -312,7 +320,9 @@ class PhysicalRegisterUnit {
                 empty.ready_to_commit = false;
                 return empty;
             }
+            //return reorderBuffer[head];
             return reorderBuffer[head];
+
         }
 
         // Mark a ROB entry as ready to commit
