@@ -17,7 +17,7 @@
 * for both physical and architectural
 * registers.
 *
-* Implements renaming, translation, and ROB management
+* Implements renaming, translation, and ROB management using a simple vector
 */
 
 class PhysicalRegisterUnit {
@@ -39,6 +39,23 @@ class PhysicalRegisterUnit {
             uint32_t branch_target;
             uint32_t recovery_pc;
             bool mispredicted;
+            
+            // Constructor to ensure proper initialization
+            ROBEntry() : 
+                instruction(0),
+                dest_reg(-1),
+                phys_reg(-1),
+                old_phys_reg(-1),
+                completed(false),
+                result(0),
+                ready_to_commit(false),
+                rob_index(-1),
+                is_branch(false),
+                predicted_taken(false),
+                actual_taken(false),
+                branch_target(0),
+                recovery_pc(0),
+                mispredicted(false) {}
         };
 
         class RAT {
@@ -74,30 +91,64 @@ class PhysicalRegisterUnit {
                 }
         };
 
-
     private: 
         uint32_t physTable[ARCH_REG * 4]; // a table holding n many physical registers (32-bit each) 
-
-        std::vector<uint32_t>freePhysRegs;
-        //uint32_t freePhysRegs[ARCH_REG * 4]; // free list of physical registers
+        std::vector<uint32_t> freePhysRegs;
         bool regReady[REG_COUNT];          // is the register value ready?
 
-        // Reorder Buffer (ROB)
-                
-        ///values for circ buffer implementation
-        int head, tail, capacity;
-
-        bool is_full;
-
+        // Simple vector-based reorder buffer
+        int maxBufferSize;  // Maximum allowed size of the ROB
+        
         // Stores the most recently committed ROB entry for processor to query
         ROBEntry lastCommittedEntry;
 
     public:
 
-        PhysicalRegisterUnit() : capacity(0) {}
+        std::vector<ROBEntry> reorderBuffer;
 
-        std::vector<ROBEntry> reorderBuffer; // the instruction reorder buffer, a circular buffer implemented below
+        // Register Alias Table implementation
+        RAT RAT_Unit;
 
+        // Default constructor
+        PhysicalRegisterUnit() : maxBufferSize(0) {
+            // Zero out the physical register table
+            for (int i = 0; i < ARCH_REG * 4; i++) {
+                physTable[i] = 0;
+            }
+            
+            // Initialize register ready flags
+            for (int i = 0; i < REG_COUNT; i++) {
+                regReady[i] = false;
+            }
+        }
+
+        // Constructor with register count
+        PhysicalRegisterUnit(int reg_count) {
+            // Validate input
+            if (reg_count <= ARCH_REG || reg_count > REG_COUNT) {
+                maxBufferSize = REG_COUNT - ARCH_REG; // Default to safe value
+            } else {
+                maxBufferSize = reg_count - ARCH_REG;
+            }
+            
+            // Zero out the physical register table
+            for (int i = 0; i < ARCH_REG * 4; i++) {
+                physTable[i] = 0;
+            }
+            
+            // Clear the free physical registers list and add registers
+            freePhysRegs.clear();
+            for (int i = ARCH_REG; i < reg_count && i < REG_COUNT; i++) {
+                freePhysRegs.push_back(i);
+            }
+
+            // Initialize register ready flags
+            for (int i = 0; i < REG_COUNT; i++) {
+                regReady[i] = (i < ARCH_REG); // Only architectural registers start ready
+            }
+        }
+
+        // Assignment operator - simplified with vector
         PhysicalRegisterUnit& operator=(const PhysicalRegisterUnit& other) {
             if (this != &other) {
                 // Copy physical register table
@@ -113,21 +164,13 @@ class PhysicalRegisterUnit {
                     regReady[i] = other.regReady[i];
                 }
 
-                capacity = other.capacity;
-                reorderBuffer.resize(capacity);
-        
-                for (int i = 0; i < capacity; i++) {
-                    reorderBuffer[i] = other.reorderBuffer[i];
-                }
-
-                // Deep copy the reorder buffer
-//                reorderBuffer = other.reorderBuffer;
-
-                // Copy circular buffer management variables
-                head = other.head;
-                tail = other.tail;
-                capacity = other.capacity;
-                is_full = other.is_full;
+                // Copy ROB 
+                maxBufferSize = other.maxBufferSize;
+                if (other.reorderBuffer.size() > 0)
+                    reorderBuffer = other.reorderBuffer;  // Simple vector copy
+ 
+                else
+                    std::vector<ROBEntry> reorderBuffer {};
 
                 // Copy the last committed entry
                 lastCommittedEntry = other.lastCommittedEntry;
@@ -138,71 +181,82 @@ class PhysicalRegisterUnit {
             return *this;
         }
 
+        // Search ROB for an instruction
         int searchByInstruction(uint32_t instruction) {
-            for (int j = 0; j < reorderBuffer.size(); ++j) {
-                if (reorderBuffer[j].instruction == instruction)
-                    return j;
-             }
-             return -1;
+            for (size_t i = 0; i < reorderBuffer.size(); i++) {
+                if (reorderBuffer[i].instruction == instruction) {
+                    return i;
+                }
+            }
+            return -1;
         }
 
-        bool checkReady(int phys_reg) { return regReady[phys_reg]; }
+        // Check if a physical register is ready
+        bool checkReady(int phys_reg) { 
+            if (phys_reg < 0 || phys_reg >= REG_COUNT) return false;
+            return regReady[phys_reg]; 
+        }
 
-        // Register Alias Table implementation
-        RAT RAT_Unit;
+        // Get physical register mapping for an architectural register
+        int getMapping(uint32_t arch_reg) { 
+            return RAT_Unit.getLiveMapping(arch_reg); 
+        }
 
-        int getMapping(uint32_t arch_reg) { return RAT_Unit.getLiveMapping(arch_reg); }
+        // Check if there are any free physical registers
+        bool checkFreePhys() { 
+            return freePhysRegs.empty(); 
+        }
 
-        bool checkFreePhys() { return freePhysRegs.empty(); }
-        // Enqueue operation
-        // 0 on success, -1 on error
-
+        // Add an entry to the ROB (enqueue)
         int enqueue(ROBEntry value) {
-            if (is_full) 
-                return -1;
-
-            // Initialize branch-related fields
-            value.is_branch = false;
-            value.predicted_taken = false;
-            value.actual_taken = false;
-            value.branch_target = 0;
-            value.recovery_pc = 0;
-            value.mispredicted = false;
+            if (reorderBuffer.size() >= maxBufferSize) 
+                return -1;  // ROB is full
             
-            value.rob_index = tail;
-            reorderBuffer[tail] = value;
-            int index = tail;
-            tail = (tail + 1) % capacity;
-        
-            return index;
+            // Set the ROB index
+            value.rob_index = reorderBuffer.size();
+            
+            // Simply add to the end of the vector
+            reorderBuffer.push_back(value);
+            
+            return value.rob_index;
         }
         
-        // Dequeue operation
+        // Remove the oldest entry from ROB (dequeue)
         ROBEntry dequeue() {
-            ROBEntry value = reorderBuffer[head];
-            head = (head + 1) % capacity;
-            is_full = false;  // After dequeue, buffer cannot be full
-        
-            return value;
-        }
-
-        // Check if reorderbuffer is empty
-        bool isEmpty() const {
-            return (head == tail) && !is_full;
-        }
-
-        // Check if reorderbuffer is full
-        bool isFull() const { return is_full; }
-
-        // Get current size of reorder
-        int size() const {
-            if (is_full) 
-                return capacity;
+            if (reorderBuffer.empty()) {
+                return ROBEntry();  // Return empty entry if ROB is empty
+            }
             
-            return (tail >= head) ? (tail - head) : (capacity - head + tail);
+            // Save the oldest entry (at front of vector)
+            ROBEntry oldestEntry = reorderBuffer.front();
+            
+            // Remove it from the buffer
+            reorderBuffer.erase(reorderBuffer.begin());
+            
+            // Update ROB indices for remaining entries
+            for (size_t i = 0; i < reorderBuffer.size(); i++) {
+                reorderBuffer[i].rob_index = i;
+            }
+            
+            return oldestEntry;
+        }
+
+        // Check if ROB is empty
+        bool isEmpty() const {
+            return reorderBuffer.empty();
+        }
+
+        // Check if ROB is full
+        bool isFull() const { 
+            return reorderBuffer.size() >= maxBufferSize; 
+        }
+
+        // Get current size of ROB
+        int size() const {
+            return reorderBuffer.size();
         }
         
-        // allocate a physical register
+        // Allocate a physical register
         int allocatePhysReg() {
             if (freePhysRegs.empty())
                 return -1; // no free registers
@@ -213,95 +267,90 @@ class PhysicalRegisterUnit {
             return reg;
         }
 
-        // free a physical register
+        // Free a physical register
         void freePhysReg(int reg) {
-            if (reg >= ARCH_REG)
+            if (reg >= ARCH_REG && reg < REG_COUNT)
                 freePhysRegs.push_back(reg);
         }
 
-        // set a register as ready with its value
+        // Set a register as ready with its value
         void setRegReady(int reg, uint32_t value) {
-            physTable[reg] = value;
-            regReady[reg] = true;
+            if (reg >= 0 && reg < REG_COUNT) {
+                physTable[reg] = value;
+                regReady[reg] = true;
+            }
         }
 
-        // check if register value is ready
+        // Check if register value is ready
         bool isValueReady(int reg) {
+            if (reg < 0 || reg >= REG_COUNT) return false;
             return regReady[reg];
         }
 
-        // get register value (only if ready)
+        // Get register value (only if ready)
         uint32_t getValue(int reg) {
+            if (reg < 0 || reg >= REG_COUNT) return 0;
             return physTable[reg];
         }
 
-        // write to the physical register
+        // Write to the physical register
         void writeRegister(int phys_reg, uint32_t val) {
-            physTable[phys_reg] = val;
-            regReady[phys_reg] = true;
+            if (phys_reg >= 0 && phys_reg < REG_COUNT) {
+                physTable[phys_reg] = val;
+                regReady[phys_reg] = true;
+            }
         }
         
-        // get number of free physical registers
+        // Get number of free physical registers
         int freeRegistersCount() {
             return freePhysRegs.size();
         }
         
-        // mark a ROB entry as completed with result
+        // Mark a ROB entry as completed with result based on physical register
         void completeROBEntry(int phys_dest, uint32_t result) {
-            // Iterate through all valid entries in the ROB
-            int i = head;
-            do {
-                // If this entry is for the specified physical register
+            for (size_t i = 0; i < reorderBuffer.size(); i++) {
                 if (reorderBuffer[i].phys_reg == phys_dest) {
-                    // Mark it as completed and store the result
                     reorderBuffer[i].completed = true;
                     reorderBuffer[i].result = result;
                     return;
                 }
-        
-                // Move to next entry (with wrap-around)
-                i = (i + 1) % capacity;
-            } while (i != tail);
-         }
+            }
+        }
 
-         // for load stores
-         void completeByIndex(int index, uint32_t result) {
-             if (index >= reorderBuffer.size())
-                 return;
-             reorderBuffer[index].completed = true;
-             reorderBuffer[index].result = result;
-             return;
-         }
+        // Mark a specific ROB entry as completed (for load/store)
+        void completeByIndex(int index, uint32_t result) {
+            if (index < 0 || index >= reorderBuffer.size())
+                return;
+                
+            reorderBuffer[index].completed = true;
+            reorderBuffer[index].result = result;
+        }
         
         // Check if head of ROB is ready to commit
         bool isHeadReadyToCommit() {
-            if (isEmpty())
+            if (reorderBuffer.empty())
                 return false;
                 
-            return reorderBuffer[head].completed;
+            return reorderBuffer[0].completed;
         }
         
-        // get the index of a ROB entry (for CDB broadcasts)
+        // Find ROB entry by physical register (for CDB broadcasts)
         int findROBEntryByPhysReg(int phys_reg) {
-            for (int i = 0; i < capacity; i++) {
-                int idx = (head + i) % capacity;
-           
-                if (reorderBuffer[idx].phys_reg == phys_reg)
-                    return idx;
+            for (size_t i = 0; i < reorderBuffer.size(); i++) {
+                if (reorderBuffer[i].phys_reg == phys_reg)
+                    return i;
             }
             return -1;
         }
         
-        // get access to the RAT for renaming operations
+        // Get access to the RAT for renaming operations
         RAT* getRAT() {
             return &RAT_Unit;
         }
         
-        // Commit the head ROB entry:
-        // - Processor should use the returned entry.result and entry.dest_reg
-        //   to update the architectural register file before calling this.
+        // Commit the head ROB entry
         bool commitHead() {
-            if (isEmpty() || !reorderBuffer[head].completed)
+            if (isEmpty() || !reorderBuffer[0].completed)
                 return false;
                 
             ROBEntry entry = dequeue();
@@ -309,9 +358,6 @@ class PhysicalRegisterUnit {
             
             // If this instruction writes to a register
             if (entry.dest_reg != -1 && entry.phys_reg != -1) {
-                // The architectural commit would happen here in hardware
-                // For simulation, we just update our tracking structures
-                
                 // Free the old physical register that was previously mapped
                 // to this architectural register
                 if (entry.old_phys_reg != -1) {
@@ -329,71 +375,67 @@ class PhysicalRegisterUnit {
 
         // Peek at head without removing it
         ROBEntry peekHead() {
-            if (isEmpty()) {
-                // Return an empty/invalid entry
-                ROBEntry empty;
-                empty.dest_reg = -1;
-                empty.phys_reg = -1;
-                empty.old_phys_reg = -1;
-                empty.completed = false;
-                empty.ready_to_commit = false;
-                empty.is_branch = false;
-                empty.mispredicted = false;
-                return empty;
+            if (reorderBuffer.size() <= 0) {
+                return ROBEntry();  // Return empty entry if ROB is empty
             }
-            //return reorderBuffer[head];
-            return reorderBuffer[head];
+            return reorderBuffer[0];
         }
 
         // Mark a ROB entry as ready to commit
         void markReadyToCommit(int phys_reg) {
-            for (int i = 0; i < capacity; i++) {
-                int idx = (head + i) % capacity;
-                if (reorderBuffer[idx].phys_reg == phys_reg && reorderBuffer[idx].completed) {
-                    reorderBuffer[idx].ready_to_commit = true;
+            for (size_t i = 0; i < reorderBuffer.size(); i++) {
+                if (reorderBuffer[i].phys_reg == phys_reg && reorderBuffer[i].completed) {
+                    reorderBuffer[i].ready_to_commit = true;
                     return;
                 }
             }
         }
-
-        // Update the capacity in constructor
-        PhysicalRegisterUnit(int reg_count) {
-            capacity = reg_count - ARCH_REG;
-            head = 0;
-            tail = 0;
-            is_full = false;
-
-            reorderBuffer.resize(capacity);
-
-            for (int i = ARCH_REG; i < reg_count; i++) 
-                freePhysRegs.push_back(i);
-
-            for (int i = 0; i < reg_count; i++)
-                regReady[i] = (i < ARCH_REG);
-        }
         
+        // Handle branch misprediction recovery
         void recover(int rob_entry_index) {
-            // Flush all ROB entries younger than the mispredicted one
-            int idx = (rob_entry_index + 1) % capacity;
-            while (idx != tail) {
-                ROBEntry &entry = reorderBuffer[idx];
+            if (rob_entry_index < 0 || rob_entry_index >= reorderBuffer.size())
+                return;  // Invalid index
+                
+            // Keep all entries up to and including the mispredicted one
+            int entriesToKeep = rob_entry_index + 1;
+            
+            // Process entries that will be removed
+            for (size_t i = entriesToKeep; i < reorderBuffer.size(); i++) {
+                ROBEntry &entry = reorderBuffer[i];
+                
                 // Restore RAT to the old mapping for dest_reg
                 if (entry.dest_reg != -1 && entry.old_phys_reg != -1) {
                     RAT_Unit.updateMapping(entry.dest_reg, entry.old_phys_reg);
                 }
+                
                 // Free the newly allocated physical register
                 if (entry.phys_reg != -1) {
                     freePhysReg(entry.phys_reg);
                 }
-                idx = (idx + 1) % capacity;
             }
-            // Move tail back to just after the recovered entry
-            tail = (rob_entry_index + 1) % capacity;
-            is_full = false;
+            
+            // Remove all entries after the mispredicted one
+            if (entriesToKeep < reorderBuffer.size()) {
+                reorderBuffer.erase(reorderBuffer.begin() + entriesToKeep, reorderBuffer.end());
+            }
         }
 
-        int getSize() { return reorderBuffer.size(); }
-        int getInstruction(int idx) { return reorderBuffer[idx].instruction;}
-
+        // Get total size of reorder buffer
+        int getSize() { 
+            return reorderBuffer.size(); 
+        }
         
+        // Get instruction at specific index
+        uint32_t getInstruction(int idx) { 
+            if (idx < 0 || idx >= reorderBuffer.size())
+                return 0;
+                
+            return reorderBuffer[idx].instruction;
+        }
+        
+        // Debug method to print ROB state
+        void printROBState() {
+            std::cout << "ROB State: size=" << reorderBuffer.size() 
+                      << ", maxBufferSize=" << maxBufferSize << std::endl;
+        }
 };

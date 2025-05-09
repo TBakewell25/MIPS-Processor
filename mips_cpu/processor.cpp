@@ -655,7 +655,7 @@ void Processor::commit(){
                 << currentState.mispredicted_rob_index << std::endl;
         
         // Reset PC to correct path
-        regfile.pc = currentState.recovery_pc;
+        regfile.pc = currentState.recovery_pc - 4;
         
         // Clear instruction queue
         nextState.instruction_queue = std::queue<uint32_t>();
@@ -751,6 +751,8 @@ void Processor::commit(){
         if (dest_reg > 0 && instr_type != 1) {
             // write to arch reg
             uint32_t dummy;
+            if (dest_reg == 7)
+                cout << "WRITING TO 7 WITH " << entry.instruction << "\n";
             regfile.access(0, 0, dummy, dummy, dest_reg, true, entry.result);
            
             // free up phys reg in RAT and elsewhere as necessary 
