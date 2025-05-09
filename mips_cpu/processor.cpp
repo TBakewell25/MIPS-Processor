@@ -163,11 +163,7 @@ void Processor::fetch() {
         return;
     } else {
         if (instruction) {
-            if (instruction == 2888040456) {
-               cout << "found instruction at " << regfile.pc << "\n";
-            }
-            //nextState.instruction_queue = instruction;
-            nextState.instruction_queue.push(instruction); 
+            nextState.instruction_queue.push(std::make_pair(instruction, regfile.pc));
         }
         stall = false;
     }
@@ -198,15 +194,20 @@ void Processor::rename(){
     // new control for each cycle, I don't think signals need to persist
     control_t control;
     uint32_t instruction = 0;
+    uint32_t pc = 0;
+    std::pair<uint32_t, uint32_t> fetchedPair;
 
     // 1. peek at instruction
     //if (currentState.instruction_queue.size())
      //   instruction = currentState.instruction_queue.front();
     
     if (currentState.instruction_queue.size())
-        instruction = currentState.instruction_queue.front();
+        fetchedPair = currentState.instruction_queue.front();
     else
         return;
+
+    instruction = fetchedPair.first;
+    pc = fetchedPair.second;
 
     // 2. decode peeked value
  //TODO: move control to state class
@@ -328,9 +329,7 @@ void Processor::rename(){
         station->is_branch = true;
         
         // Calculate the branch target for immediate branches
-        int16_t offset = static_cast<int16_t>(imm);
-        uint32_t branch_target = regfile.pc + (offset << 2);
-        station->branch_target = branch_target;
+        station->branch_target = pc;
         station->next_pc = regfile.pc;  // Store current PC for recovery
         
         // Get prediction
@@ -345,7 +344,7 @@ void Processor::rename(){
         
         toBeSent.is_branch = true;
         toBeSent.predicted_taken = prediction;
-        toBeSent.branch_target = branch_target;
+        toBeSent.branch_target = 0;
         toBeSent.recovery_pc = regfile.pc;
         toBeSent.mispredicted = false;
         
@@ -354,9 +353,9 @@ void Processor::rename(){
         
         // If we predict taken, update PC to branch target
         if (prediction) {
-            regfile.pc = branch_target;
-            cout << "Branch at PC: 0x" << hex << (regfile.pc - 4) << dec 
-                 << " predicted taken to target: 0x" << hex << branch_target << dec << endl;
+            regfile.pc = regfile.pc - 4 + (imm << 2);
+       //     cout << "Branch at PC: 0x" << hex << (regfile.pc - 4) << dec 
+      //           << " predicted taken to target: 0x" << hex << branch_target << dec << endl;
         } else {
             cout << "Branch at PC: 0x" << hex << (regfile.pc - 4) << dec 
                  << " predicted not taken" << endl;
@@ -369,8 +368,8 @@ void Processor::rename(){
         // 5. Create ROBEntry
         PhysicalRegisterUnit::ROBEntry toBeSent = populateROBEntry(instruction,
                          write_reg,
-                         new_phys_reg, // not implemented
-                         old_phys_reg);// not implemented
+                         new_phys_reg, 
+                         old_phys_reg);
     
         // 6. Dispatch HANDLED ABOVE
         int ROB_index = nextState.pushToROB(toBeSent);  
@@ -463,7 +462,8 @@ void Processor::execute(){
             continue;
 
         // execute the instruction
-        currentUnit.execute();
+        control_t control;
+        int alu_zero = currentUnit.execute(&control);
 
         // get the result and the original RS
         uint32_t result = currentUnit.getResult();
@@ -478,12 +478,15 @@ void Processor::execute(){
             int opcode = (station.instruction >> 26) & 0x3f;
             
             if (opcode == 0x4) {  // beq
-                actual_taken = (station.rs_val == station.rt_val);
+                actual_taken = control.branch;
             } else if (opcode == 0x5) {  // bne
-                actual_taken = (station.rs_val != station.rt_val);
+                actual_taken = control.bne;
             } else if (opcode == 0x2 || opcode == 0x3) {  // j, jal are always taken
                 actual_taken = true;
             }
+            uint32_t imm = (currentUnit.instruction & 0xffff);
+ 
+            station.branch_target += (control.branch && !control.bne && alu_zero) || (control.bne && !alu_zero) ? imm << 2 : 0; 
             
             // Update the ROB entry
             int rob_index = nextState.physRegFile.searchByInstruction(station.instruction);
@@ -534,23 +537,7 @@ void Processor::execute(){
             nextState.ArithmeticStations[source_station].executing = false;
             nextState.ArithUnits[j].setOpen();
         }
-/*
-        CDBEntry *newCDBEntry = &nextState.CDB[free_cdb_entry];
-
-        // we need to transfer metadata from rs to new cdb entry to broadcast
-        int phys_dest = currentState.ArithmeticStations[source_station].phys_rd;
-        newCDBEntry->valid = true;
-        newCDBEntry->phys_reg = phys_dest;
-        newCDBEntry->result = result;
-        //nextState.CDB[free_cdb_entry] = CDBEntry(phys_dest, result);
-
-        nextState.physRegFile.completeROBEntry(phys_dest, result);
-        
-
-        nextState.ArithmeticStations[source_station].in_use = false;
-        nextState.ArithmeticStations[source_station].executing = false;
-        nextState.ArithUnits[j].setOpen(); */
-    }
+   }
 
 
     for (int j = 0; j < 2; ++j) {
@@ -559,7 +546,8 @@ void Processor::execute(){
             continue;
 
         // execute the instruction
-        currentUnit.execute();
+        control_t control;
+        int alu_zero = currentUnit.execute(&control);
 
         // get the result and the original RS
         uint32_t address = currentUnit.getResult();
@@ -655,37 +643,42 @@ void Processor::commit(){
                 << currentState.mispredicted_rob_index << std::endl;
         
         // Reset PC to correct path
-        regfile.pc = currentState.recovery_pc - 4;
+        regfile.pc = currentState.recovery_pc;
         
         // Clear instruction queue
-        nextState.instruction_queue = std::queue<uint32_t>();
+        nextState.instruction_queue = std::queue<std::pair<uint32_t, uint32_t>>();
         
         // Use the existing recover method to restore the RAT and free registers
         nextState.physRegFile.recover(currentState.mispredicted_rob_index);
         
         // Clear any executing instructions in execution units
         for (int i = 0; i < 4; i++) {
-            nextState.ArithUnits[i].setOpen();
+            nextState.ArithUnits[i].clear();
+            currentState.ArithUnits[i].clear();
         }
         for (int i = 0; i < 2; i++) {
-            nextState.MemUnits[i].setOpen();
+            currentState.MemUnits[i].clear(); // possible issue
+            nextState.MemUnits[i].clear();
         }
         
         // Clear reservation stations that are younger than mispredicted instruction
         for (int i = 0; i < ARITHM_STATIONS; i++) {
             int rob_idx = findInstructionInROB(nextState.ArithmeticStations[i].instruction);
             if (rob_idx > currentState.mispredicted_rob_index || rob_idx == -1) {
-                nextState.ArithmeticStations[i].in_use = false;
-                nextState.ArithmeticStations[i].executing = false;
+                currentState.ArithmeticStations[i].zero();
+                nextState.ArithmeticStations[i].zero();
             }
         }
         for (int i = 0; i < MEM_STATIONS; i++) {
             int rob_idx = findInstructionInROB(nextState.MemoryStations[i].instruction);
             if (rob_idx > currentState.mispredicted_rob_index || rob_idx == -1) {
-                nextState.MemoryStations[i].in_use = false;
-                nextState.MemoryStations[i].executing = false;
+                nextState.MemoryStations[i].zero();
+                currentState.MemoryStations[i].zero();
             }
         }
+
+        currentState.physRegFile.flushROB(currentState.mispredicted_rob_index);
+        nextState.physRegFile.flushROB(currentState.mispredicted_rob_index);
         
         // Remove memory operations from load/store queues that are younger than mispredicted instruction
         for (auto it = nextState.memUnit.load_queue.begin(); it != nextState.memUnit.load_queue.end();) {

@@ -38,6 +38,7 @@ class ReservationStation {
         bool predicted_taken;
         uint32_t branch_target;
         uint32_t next_pc;     // PC + 4, needed for recovery
+        bool dead; // flushed, dead instruction
 
         ReservationStation() {
             in_use = false;
@@ -55,13 +56,29 @@ class ReservationStation {
 
         void setInstruction(uint32_t instr) { instruction = instr; }
        
-        // check if RS is present in station 
-        //bool peekRS() { return (ResStation == RS1 || ResStation == RS2); }
+        void zero() {
+            instruction = 0;
+            opcode = 0;
 
-        // write values to station
-        //void writeValues(uint32_t Value_1, uint32_t Value_2) { Val1 = Value_1; Val2 = Value_2; } 
- 
-        // write RS values
-        //void writeRS(uint32_t Stat1, uint32_t Stat2) { RS1 = Stat1; RS2 = Stat2; }
+            phys_rt =  phys_rs = 0; 
+            ready_rt =  ready_rs = false; 
+            rt_val =  rs_val = 0; 
+            phys_rd = 0; // mapping for destination
+            ROB_index = -1; // index of entry in ROB
+           
+            addr = shamt = funct = imm = 0;
 
+            control.reset();
+            in_use = false;
+            executing = false;
+
+            mem_op_index = 0; // location in memory queue, only for load/store
+            is_load = false;
+            is_store = false;
+        
+            is_branch = false;
+            predicted_taken = false;
+            branch_target = false;
+            next_pc = 0;     
+        }
 };

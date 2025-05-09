@@ -122,6 +122,17 @@ class PhysicalRegisterUnit {
             }
         }
 
+        void flushROB(int index) {
+            std::vector<ROBEntry> newROB;
+            for (int j = 0; j < index; ++j) {
+                ROBEntry preserve = reorderBuffer[j];
+                newROB.push_back(preserve);
+            }
+
+            reorderBuffer = newROB;
+            return;
+        }
+
         // Constructor with register count
         PhysicalRegisterUnit(int reg_count) {
             // Validate input
@@ -166,7 +177,7 @@ class PhysicalRegisterUnit {
 
                 // Copy ROB 
                 maxBufferSize = other.maxBufferSize;
-                if (other.reorderBuffer.size() > 0)
+                if (other.reorderBuffer.size() > 0 &&  other.reorderBuffer.size() < 1000)
                     reorderBuffer = other.reorderBuffer;  // Simple vector copy
  
                 else

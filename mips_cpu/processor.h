@@ -26,7 +26,7 @@ class Processor {
         control_t control;
         Memory *memory;
         Registers regfile;
-    
+        int rob_index;    
         uint32_t processor_pc; // an additional pc to track 
         //// OOO things
 
@@ -89,7 +89,7 @@ class Processor {
             public:
 
                 // an instruction queue to get instructions from fetch to rename stages  
-                std::queue<uint32_t>instruction_queue;
+                std::queue<std::pair<uint32_t, uint32_t>>instruction_queue;
                 //uint32_t instruction_queue; // 1 instruction at a time for now
                 // Reservation Stations
                 ReservationStation ArithmeticStations[ARITHM_STATIONS];
@@ -365,6 +365,7 @@ class Processor {
         Processor(Memory *mem) { 
             regfile.pc = processor_pc = 0; 
             memory = mem;
+            rob_index = 0;
             
             // Initialize branch predictor and misprediction flags
             currentState.handling_misprediction = false;
