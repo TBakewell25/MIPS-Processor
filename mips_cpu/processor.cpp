@@ -388,8 +388,12 @@ void Processor::rename(){
     }
     
     // 7. Remove Instruction
-    currentState.instruction_queue.pop();
-    nextState.instruction_queue.pop();
+    if (currentState.instruction_queue.size() > 0)
+        currentState.instruction_queue.pop();
+
+    if (nextState.instruction_queue.size() > 0)
+        nextState.instruction_queue.pop();
+
     //std::swap(currentState.instruction_queue, nextState.instruction_queue);    
 }
 
