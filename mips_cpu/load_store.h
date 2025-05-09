@@ -53,7 +53,7 @@ public:
 
     int findByInstructionLoad(uint32_t instruction) {
         for (int j = 0; j < load_queue.size(); ++j) {
-            if (load_queue[j].instruction = instruction)
+            if (load_queue[j].instruction == instruction)
                 return j;
         }
         return -1;
@@ -81,8 +81,8 @@ public:
     }
     
     // Update store address and data
-    void updateStore(int ind, uint32_t address, uint32_t data) {
-        int index = store_queue.size() - 1; // always tail
+    void updateStore(int index, uint32_t address, uint32_t data) {
+        //int index = store_queue.size() - 1; // always tail
         if (index >= 0 && index < store_queue.size()) {
             store_queue[index].address = address;
             store_queue[index].data = data;
@@ -188,6 +188,15 @@ public:
             }
         }
     }
+ 
+
+    void update() {
+        for (int j = 0; j < load_queue.size(); ++j) 
+            load_queue[j].rob_index--;
+        for (int j = 0; j < store_queue.size(); ++j) 
+            store_queue[j].rob_index--;
+     }
+
 
    
 private:

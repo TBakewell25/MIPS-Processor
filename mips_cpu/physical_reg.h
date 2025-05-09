@@ -443,6 +443,11 @@ class PhysicalRegisterUnit {
                 
             return reorderBuffer[idx].instruction;
         }
+
+        void update() {
+            for (int i= 0; i < reorderBuffer.size(); ++i)
+                reorderBuffer[i].rob_index--;
+        }
         
         // Debug method to print ROB state
         void printROBState() {

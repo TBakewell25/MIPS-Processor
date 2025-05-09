@@ -163,6 +163,8 @@ void Processor::fetch() {
         return;
     } else {
         if (instruction) {
+            if (instruction == 2364014592)
+                const int dummy = 11;
             nextState.instruction_queue.push(std::make_pair(instruction, regfile.pc));
         }
         stall = false;
@@ -734,8 +736,20 @@ void Processor::commit(){
         // we peeked, now we can actually fetch it
         // need to dump both next state and current state since its in both
         // both are the same, but we'll use currentState
-        PhysicalRegisterUnit::ROBEntry entry = currentState.physRegFile.dequeue();        
+        PhysicalRegisterUnit::ROBEntry entry = currentState.physRegFile.dequeue();
+        nextState.physRegFile.update();        
         nextState.physRegFile.dequeue();      // ignore value  
+
+        switch(instr_type) {
+            case 1:
+                nextState.physRegFile.update();
+                break;
+            case 2: 
+                nextState.physRegFile.update(); // update old ROB indices now that a pop has occured
+                break;
+            defualt:
+                break;
+        }
 
         int dest_reg = entry.dest_reg;
         uint32_t instruction = entry.instruction;

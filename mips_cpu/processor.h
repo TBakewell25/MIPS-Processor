@@ -311,7 +311,7 @@ class Processor {
     
             // Deep copy the physical register file
             dest.physRegFile = src.physRegFile;
-            
+            dest.memUnit = src.memUnit;
             // Copy branch misprediction state
             dest.handling_misprediction = src.handling_misprediction;
             dest.recovery_pc = src.recovery_pc;
