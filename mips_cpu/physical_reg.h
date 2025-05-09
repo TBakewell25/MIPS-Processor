@@ -31,6 +31,14 @@ class PhysicalRegisterUnit {
             uint32_t result;     // Result value
             bool ready_to_commit;
             int rob_index;
+            
+            // Branch-related fields
+            bool is_branch;
+            bool predicted_taken;
+            bool actual_taken;
+            uint32_t branch_target;
+            uint32_t recovery_pc;
+            bool mispredicted;
         };
 
         class RAT {
@@ -75,8 +83,7 @@ class PhysicalRegisterUnit {
         bool regReady[REG_COUNT];          // is the register value ready?
 
         // Reorder Buffer (ROB)
-        std::vector<ROBEntry> reorderBuffer; // the instruction reorder buffer, a circular buffer implemented below
-        
+                
         ///values for circ buffer implementation
         int head, tail, capacity;
 
@@ -86,6 +93,10 @@ class PhysicalRegisterUnit {
         ROBEntry lastCommittedEntry;
 
     public:
+
+        PhysicalRegisterUnit() : capacity(0) {}
+
+        std::vector<ROBEntry> reorderBuffer; // the instruction reorder buffer, a circular buffer implemented below
 
         PhysicalRegisterUnit& operator=(const PhysicalRegisterUnit& other) {
             if (this != &other) {
@@ -150,6 +161,14 @@ class PhysicalRegisterUnit {
             if (is_full) 
                 return -1;
 
+            // Initialize branch-related fields
+            value.is_branch = false;
+            value.predicted_taken = false;
+            value.actual_taken = false;
+            value.branch_target = 0;
+            value.recovery_pc = 0;
+            value.mispredicted = false;
+            
             value.rob_index = tail;
             reorderBuffer[tail] = value;
             int index = tail;
@@ -311,18 +330,19 @@ class PhysicalRegisterUnit {
         // Peek at head without removing it
         ROBEntry peekHead() {
             if (isEmpty()) {
-            // Return an empty/invalid entry
+                // Return an empty/invalid entry
                 ROBEntry empty;
                 empty.dest_reg = -1;
                 empty.phys_reg = -1;
                 empty.old_phys_reg = -1;
                 empty.completed = false;
                 empty.ready_to_commit = false;
+                empty.is_branch = false;
+                empty.mispredicted = false;
                 return empty;
             }
             //return reorderBuffer[head];
             return reorderBuffer[head];
-
         }
 
         // Mark a ROB entry as ready to commit
@@ -371,4 +391,9 @@ class PhysicalRegisterUnit {
             tail = (rob_entry_index + 1) % capacity;
             is_full = false;
         }
+
+        int getSize() { return reorderBuffer.size(); }
+        int getInstruction(int idx) { return reorderBuffer[idx].instruction;}
+
+        
 };

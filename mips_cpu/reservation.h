@@ -32,10 +32,20 @@ class ReservationStation {
         int mem_op_index; // location in memory queue, only for load/store
         bool is_load;
         bool is_store;
+        
+        // Branch prediction fields
+        bool is_branch;
+        bool predicted_taken;
+        uint32_t branch_target;
+        uint32_t next_pc;     // PC + 4, needed for recovery
 
         ReservationStation() {
             in_use = false;
             executing = false;
+            is_branch = false;
+            predicted_taken = false;
+            branch_target = 0;
+            next_pc = 0;
         };
 
         // Check if CandidateStation is occupied

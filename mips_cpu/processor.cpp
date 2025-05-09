@@ -37,7 +37,12 @@ void Processor::initialize(int level) {
                .zero_extend = 0};
    
     opt_level = level;
-    // Optimization level-specific initialization
+    
+    // Initialize branch predictor
+    for (int i = 0; i < branch_predictor.TABLE_SIZE; i++) {
+        branch_predictor.prediction_table[i] = false;
+    }
+    branch_predictor.history_register = 0;
 }
 
 void Processor::advance() {
@@ -146,8 +151,6 @@ void Processor::testFetch(uint32_t instruction) {
     regfile.pc += 4;
 }
 
-   
-
 void Processor::fetch() {
     uint32_t instruction;
     bool instruction_read;
@@ -213,6 +216,10 @@ void Processor::rename(){
     int rs = (instruction >> 21) & 0x1f;
     int rt = (instruction >> 16) & 0x1f;
     int rd = (instruction >> 11) & 0x1f;
+    int shamt = (instruction >> 6) & 0x1f;
+    int funct = instruction & 0x3f;
+    uint32_t imm = (instruction & 0xffff);
+    int addr = instruction & 0x3ffffff;
 
     int write_reg = control.reg_dest ? rd : rt;
 
@@ -314,32 +321,73 @@ void Processor::rename(){
     if (control.reg_write && write_reg != 0)
         nextState.physRegFile.RAT_Unit.updateMapping(write_reg, new_phys_reg);
 
+    // Branch handling
+    if (isBranchInstruction(instruction)) {
+        // This is a branch instruction
+        int opcode = (instruction >> 26) & 0x3f;
+        station->is_branch = true;
+        
+        // Calculate the branch target for immediate branches
+        int16_t offset = static_cast<int16_t>(imm);
+        uint32_t branch_target = regfile.pc + (offset << 2);
+        station->branch_target = branch_target;
+        station->next_pc = regfile.pc;  // Store current PC for recovery
+        
+        // Get prediction
+        bool prediction = branch_predictor.getPrediction(regfile.pc - 4);
+        station->predicted_taken = prediction;
+        
+        // Create ROB entry with branch info
+        PhysicalRegisterUnit::ROBEntry toBeSent = populateROBEntry(instruction,
+                        write_reg,
+                        new_phys_reg,
+                        old_phys_reg);
+        
+        toBeSent.is_branch = true;
+        toBeSent.predicted_taken = prediction;
+        toBeSent.branch_target = branch_target;
+        toBeSent.recovery_pc = regfile.pc;
+        toBeSent.mispredicted = false;
+        
+        // Push to ROB and get index
+        int ROB_index = nextState.pushToROB(toBeSent);
+        
+        // If we predict taken, update PC to branch target
+        if (prediction) {
+            regfile.pc = branch_target;
+            cout << "Branch at PC: 0x" << hex << (regfile.pc - 4) << dec 
+                 << " predicted taken to target: 0x" << hex << branch_target << dec << endl;
+        } else {
+            cout << "Branch at PC: 0x" << hex << (regfile.pc - 4) << dec 
+                 << " predicted not taken" << endl;
+        }
+    } else {
+        // now that we have actually read data from the reg file we can send along instructions
+        // TODO: need to be able to read from phys regs, not arch regs
+        // TODO: add actual way to push instruction data, not instruction itself.
+     
+        // 5. Create ROBEntry
+        PhysicalRegisterUnit::ROBEntry toBeSent = populateROBEntry(instruction,
+                         write_reg,
+                         new_phys_reg, // not implemented
+                         old_phys_reg);// not implemented
     
-    // now that we have actually read data from the reg file we can send along instructions
-    // TODO: need to be able to read from phys regs, not arch regs
-    // TODO: add actual way to push instruction data, not instruction itself.
- 
-    // 5. Create ROBEntry
-    PhysicalRegisterUnit::ROBEntry toBeSent = populateROBEntry(instruction,
-                     write_reg,
-                     new_phys_reg, // not implemented
-                     old_phys_reg);// not implemented
-
-    
-    // 6. Dispatch HANDLED ABOVE
-    int ROB_index = nextState.pushToROB(toBeSent);  
- 
-    if (instr_type == 1) { // store
-        int store_idx = nextState.memUnit.addStore(ROB_index, size, instruction);        
-        station->mem_op_index = store_idx;
-        station->is_store = true;
-        station->is_load = false;
-    } else if (instr_type == 2) { // load
-        int load_idx = nextState.memUnit.addLoad(ROB_index, new_phys_reg, size, instruction);
-        station->mem_op_index = load_idx;
-        station->is_load = true;
-        station->is_store = false;
+        // 6. Dispatch HANDLED ABOVE
+        int ROB_index = nextState.pushToROB(toBeSent);  
+     
+        if (instr_type == 1) { // store
+            int store_idx = nextState.memUnit.addStore(ROB_index, size, instruction);        
+            station->mem_op_index = store_idx;
+            station->is_store = true;
+            station->is_load = false;
+        } else if (instr_type == 2) { // load
+            int load_idx = nextState.memUnit.addLoad(ROB_index, new_phys_reg, size, instruction);
+            station->mem_op_index = load_idx;
+            station->is_load = true;
+            station->is_store = false;
+        }
     }
+    
     // 7. Remove Instruction
     currentState.instruction_queue.pop();
     nextState.instruction_queue.pop();
@@ -420,6 +468,56 @@ void Processor::execute(){
         // get the result and the original RS
         uint32_t result = currentUnit.getResult();
         int source_station = currentUnit.getSourceRS(); 
+
+        // Check if this is a branch instruction
+        if (currentState.ArithmeticStations[source_station].is_branch) {
+            ReservationStation &station = currentState.ArithmeticStations[source_station];
+            
+            // Calculate branch outcome
+            bool actual_taken = false;
+            int opcode = (station.instruction >> 26) & 0x3f;
+            
+            if (opcode == 0x4) {  // beq
+                actual_taken = (station.rs_val == station.rt_val);
+            } else if (opcode == 0x5) {  // bne
+                actual_taken = (station.rs_val != station.rt_val);
+            } else if (opcode == 0x2 || opcode == 0x3) {  // j, jal are always taken
+                actual_taken = true;
+            }
+            
+            // Update the ROB entry
+            int rob_index = nextState.physRegFile.searchByInstruction(station.instruction);
+            if (rob_index >= 0) {
+                nextState.physRegFile.reorderBuffer[rob_index].actual_taken = actual_taken;
+                
+                // Check for misprediction
+                bool misprediction = (actual_taken != station.predicted_taken);
+                nextState.physRegFile.reorderBuffer[rob_index].mispredicted = misprediction;
+                
+                // If mispredicted, set flag for recovery during commit
+                if (misprediction) {
+                    nextState.handling_misprediction = true;
+                    nextState.mispredicted_rob_index = rob_index;
+                    
+                    // Set recovery PC
+                    if (actual_taken) {
+                        nextState.recovery_pc = station.branch_target;
+                    } else {
+                        nextState.recovery_pc = station.next_pc;
+                    }
+                    
+                    // Update branch predictor
+                    branch_predictor.update(station.next_pc - 4, actual_taken);
+                    
+                    std::cout << "Branch misprediction detected at PC: 0x" << std::hex 
+                              << station.next_pc - 4 << std::dec << std::endl;
+                    std::cout << "  Predicted: " << (station.predicted_taken ? "taken" : "not taken") 
+                              << ", Actual: " << (actual_taken ? "taken" : "not taken") << std::endl;
+                    std::cout << "  Recovery PC: 0x" << std::hex << nextState.recovery_pc 
+                              << std::dec << std::endl;
+                }
+            }
+        }
 
         // queue of for writeback (make CDB entry)
         // TODO: handle no open cdb entry
@@ -519,25 +617,7 @@ void Processor::execute(){
             }
         }
     }
-} 
-            
-/*
-        // queue of for writeback (make CDB entry)
-        // TODO: handle no open cdb entry
-        int free_cdb_entry = currentState.findOpenCDB();
-
-        // we need to transfer metadata from rs to new cdb entry to broadcast
-        int phys_dest = currentState.MemoryStations[source_station].phys_rd;
-        nextState.CDB[free_cdb_entry] = CDBEntry(phys_dest, result);
-
-        nextState.physRegFile.completeROBEntry(phys_dest, result);
-
-        nextState.MemoryStations[source_station].in_use = false;
-        nextState.MemoryStations[source_station].executing = false;
-        nextState.MemUnits[j].setOpen();
-    }
 }
-*/
 
 void Processor::write_back(){
     if (cold_start > 1)
@@ -564,6 +644,75 @@ void Processor::write_back(){
 void Processor::commit(){
     if (cold_start > 0)
         return;
+
+    // Handle branch misprediction recovery
+    if (currentState.handling_misprediction) {
+        // Recover from misprediction
+        std::cout << "Recovering from branch misprediction" << std::endl;
+        std::cout << "  Setting PC to: 0x" << std::hex << currentState.recovery_pc 
+                << std::dec << std::endl;
+        std::cout << "  Flushing instructions after ROB index: " 
+                << currentState.mispredicted_rob_index << std::endl;
+        
+        // Reset PC to correct path
+        regfile.pc = currentState.recovery_pc;
+        
+        // Clear instruction queue
+        nextState.instruction_queue = std::queue<uint32_t>();
+        
+        // Use the existing recover method to restore the RAT and free registers
+        nextState.physRegFile.recover(currentState.mispredicted_rob_index);
+        
+        // Clear any executing instructions in execution units
+        for (int i = 0; i < 4; i++) {
+            nextState.ArithUnits[i].setOpen();
+        }
+        for (int i = 0; i < 2; i++) {
+            nextState.MemUnits[i].setOpen();
+        }
+        
+        // Clear reservation stations that are younger than mispredicted instruction
+        for (int i = 0; i < ARITHM_STATIONS; i++) {
+            int rob_idx = findInstructionInROB(nextState.ArithmeticStations[i].instruction);
+            if (rob_idx > currentState.mispredicted_rob_index || rob_idx == -1) {
+                nextState.ArithmeticStations[i].in_use = false;
+                nextState.ArithmeticStations[i].executing = false;
+            }
+        }
+        for (int i = 0; i < MEM_STATIONS; i++) {
+            int rob_idx = findInstructionInROB(nextState.MemoryStations[i].instruction);
+            if (rob_idx > currentState.mispredicted_rob_index || rob_idx == -1) {
+                nextState.MemoryStations[i].in_use = false;
+                nextState.MemoryStations[i].executing = false;
+            }
+        }
+        
+        // Remove memory operations from load/store queues that are younger than mispredicted instruction
+        for (auto it = nextState.memUnit.load_queue.begin(); it != nextState.memUnit.load_queue.end();) {
+            if (it->rob_index > currentState.mispredicted_rob_index) {
+                it = nextState.memUnit.load_queue.erase(it);
+            } else {
+                ++it;
+            }
+        }
+        for (auto it = nextState.memUnit.store_queue.begin(); it != nextState.memUnit.store_queue.end();) {
+            if (it->rob_index > currentState.mispredicted_rob_index) {
+                it = nextState.memUnit.store_queue.erase(it);
+            } else {
+                ++it;
+            }
+        }
+        
+        // Clear CDB entries
+        for (int i = 0; i < MEM_STATIONS + ARITHM_STATIONS; i++) {
+            nextState.CDB[i].valid = false;
+        }
+        
+        // Reset misprediction handling flag
+        nextState.handling_misprediction = false;
+        
+        return; // Skip normal commit for this cycle
+    }
 
     // bookeeping for committing
     int commit_count = 0; 
@@ -609,7 +758,18 @@ void Processor::commit(){
                 nextState.physRegFile.freePhysReg(entry.old_phys_reg);
         }
 
-        // TODO: NEED BRANCH AND LOAD/STORE
+        // Handle committing of branches
+        if (entry.is_branch) {
+            cout << "Committed branch at ROB index " << entry.rob_index 
+                 << ", mispredicted: " << (entry.mispredicted ? "yes" : "no") << endl;
+
+            // If this was a correctly predicted branch, we can update the predictor
+            // (Mispredicted branches already updated the predictor in the execute stage)
+            if (!entry.mispredicted) {
+                branch_predictor.update(entry.recovery_pc - 4, entry.actual_taken);
+            }
+        }
+
         commit_count++;
         cout << "Committed instruction, processor_pc is " << processor_pc << "\n" << endl;
         processor_pc+=4;

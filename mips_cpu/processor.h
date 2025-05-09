@@ -30,7 +30,37 @@ class Processor {
         uint32_t processor_pc; // an additional pc to track 
         //// OOO things
 
-        
+        // Simple branch predictor
+        struct BranchPredictor {
+            static const int TABLE_SIZE = 1024;
+            bool prediction_table[TABLE_SIZE];  // True = taken, False = not taken
+            uint32_t history_register;          // Global history register
+            
+            BranchPredictor() : history_register(0) {
+                // Initialize predictor - default to not taken
+                for (int i = 0; i < TABLE_SIZE; i++) {
+                    prediction_table[i] = false;
+                }
+            }
+            
+            // Get prediction for a branch instruction
+            bool getPrediction(uint32_t pc) {
+                int index = (pc ^ history_register) & (TABLE_SIZE - 1);
+                return prediction_table[index];
+            }
+            
+            // Update predictor after branch resolution
+            void update(uint32_t pc, bool taken) {
+                int index = (pc ^ history_register) & (TABLE_SIZE - 1);
+                prediction_table[index] = taken;
+                
+                // Update history register
+                history_register = ((history_register << 1) | (taken ? 1 : 0)) & 0xF;
+            }
+        };
+
+        BranchPredictor branch_predictor;
+
         /* States like with pipeline
         * will theoretically be needed for:
         *    -reservation stations
@@ -72,6 +102,11 @@ class Processor {
    
                 MemoryOperationUnit memUnit; 
 
+                // Branch misprediction tracking
+                bool handling_misprediction;
+                uint32_t recovery_pc;
+                int mispredicted_rob_index;
+
                 // copy assignment
                 State& operator=(const State& other) {
                     if (this != &other) {
@@ -97,6 +132,11 @@ class Processor {
                         // Deep copy the physical register file
                         physRegFile = other.physRegFile;
                         memUnit = other.memUnit;
+                        
+                        // Copy branch misprediction state
+                        handling_misprediction = other.handling_misprediction;
+                        recovery_pc = other.recovery_pc;
+                        mispredicted_rob_index = other.mispredicted_rob_index;
                     }
                     return *this;
                 }
@@ -271,7 +311,11 @@ class Processor {
     
             // Deep copy the physical register file
             dest.physRegFile = src.physRegFile;
-    
+            
+            // Copy branch misprediction state
+            dest.handling_misprediction = src.handling_misprediction;
+            dest.recovery_pc = src.recovery_pc;
+            dest.mispredicted_rob_index = src.mispredicted_rob_index;
         }
 
 
@@ -298,9 +342,39 @@ class Processor {
         void execute();
         void write_back();
         void commit();
+        
+        // Check if an instruction is a branch
+        bool isBranchInstruction(uint32_t instruction) {
+            int opcode = (instruction >> 26) & 0x3f;
+            return (opcode == 0x4 || opcode == 0x5 || // beq, bne
+                    opcode == 0x2 || opcode == 0x3);  // j, jal
+        }
+        
+        // Find an instruction in the ROB
+        int findInstructionInROB(uint32_t instruction) {
+            for (int i = 0; i < currentState.physRegFile.getSize(); i++) {
+                if (currentState.physRegFile.getInstruction(i) == instruction) {
+                    return i;
+                }
+            }
+            return -1;
+        }
 
     public:
-        Processor(Memory *mem) { regfile.pc = processor_pc = 0; memory = mem;}
+
+        Processor(Memory *mem) { 
+            regfile.pc = processor_pc = 0; 
+            memory = mem;
+            
+            // Initialize branch predictor and misprediction flags
+            currentState.handling_misprediction = false;
+            currentState.recovery_pc = 0;
+            currentState.mispredicted_rob_index = -1;
+            
+            nextState.handling_misprediction = false;
+            nextState.recovery_pc = 0;
+            nextState.mispredicted_rob_index = -1;
+        }
         
         // Get PC
         uint32_t getPC() { return regfile.pc; }
@@ -334,6 +408,13 @@ class Processor {
             new_entry.completed = false;
             new_entry.ready_to_commit = false;
             new_entry.result = 0;
+            // Initialize branch fields
+            new_entry.is_branch = false;
+            new_entry.predicted_taken = false;
+            new_entry.actual_taken = false;
+            new_entry.branch_target = 0;
+            new_entry.recovery_pc = 0;
+            new_entry.mispredicted = false;
 
             return new_entry;
          }    
@@ -343,3 +424,4 @@ class Processor {
          int cold_start = 5;
          bool stall = false;
 };
+
