@@ -751,10 +751,10 @@ void Processor::commit(){
         if (dest_reg > 0 && instr_type != 1) {
             // write to arch reg
             uint32_t dummy;
-            if (dest_reg == 7)
-                cout << "WRITING TO 7 WITH " << entry.instruction << "\n";
-            regfile.access(0, 0, dummy, dummy, dest_reg, true, entry.result);
-           
+            if (!isBranchInstruction(entry.instruction))
+                regfile.access(0, 0, dummy, dummy, dest_reg, true, entry.result);
+          
+             
             // free up phys reg in RAT and elsewhere as necessary 
             if (entry.old_phys_reg != -1) 
                 nextState.physRegFile.freePhysReg(entry.old_phys_reg);
